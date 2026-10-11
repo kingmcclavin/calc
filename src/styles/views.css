@@ -1298,8 +1298,9 @@
   }
   .device-keys {
     flex: 0 0 auto;
-    height: clamp(300px, 60%, 540px);
-    padding: 0 0 calc(6px + var(--safe-b));
+    height: clamp(300px, 60%, 640px);
+    /* keys reach down to just above the home indicator */
+    padding: 0 0 max(6px, calc(var(--safe-b) - 14px));
     border-left: 0;
     gap: 4px;
   }
@@ -1369,4 +1370,12 @@
   max-width: 820px;
   margin: 0 auto;
   border-right: 0;
+}
+
+@media (max-width: 899px) {
+  /* nothing lighter can ever show around the edges of the device */
+  html,
+  body {
+    background: var(--dev-bg);
+  }
 }

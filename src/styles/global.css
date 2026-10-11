@@ -158,7 +158,10 @@ button {
 .app {
   /* Fixed to the viewport so mobile browsers never scroll or offset the whole page */
   position: fixed;
-  inset: 0;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--app-h, 100dvh);
   display: grid;
   grid-template-columns: var(--nav-w) 1fr;
   overflow: hidden;
