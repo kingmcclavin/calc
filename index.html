@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
+    <meta name="description" content="Lumen — a modern graphing calculator with TI-84-style workflow: scientific calculations, interactive graphs, tables, statistics and an equation solver. Runs entirely in your browser." />
+    <meta name="theme-color" content="#0a0d13" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#f3f4f8" media="(prefers-color-scheme: light)" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Lumen" />
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <title>Lumen Graphing Calculator</title>
+    <script>
+      // Apply the saved theme before first paint to avoid a flash
+      (function () {
+        try {
+          var s = JSON.parse(localStorage.getItem('lumen84-state') || '{}');
+          var t = (s.state && s.state.settings && s.state.settings.theme) || 'dark';
+          if (t === 'system') t = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+          document.documentElement.setAttribute('data-theme', t);
+        } catch (e) {
+          document.documentElement.setAttribute('data-theme', 'dark');
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <noscript>Lumen needs JavaScript enabled to run.</noscript>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
