@@ -3,8 +3,9 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 import type { AngleMode, Scalar } from '../math/evaluate';
 import type { FormatOptions } from '../math/format';
 import { EXAMPLE_PROGRAMS } from '../math/program';
+import type { ModeFn, ModeWindow, ParamMode } from '../graph/modes';
 
-export type ViewId = 'calc' | 'yeq' | 'graph' | 'table' | 'stats' | 'solver' | 'programs' | 'history' | 'settings';
+export type ViewId = 'calc' | 'mode' | 'yeq' | 'graph' | 'table' | 'stats' | 'solver' | 'programs' | 'history' | 'settings';
 export type ThemePref = 'dark' | 'light' | 'system';
 /** What a TI-style key (Y=, WINDOW, ZOOM, TRACE, CALC, STAT PLOT) asks the target view to open. */
 export type GraphIntent = 'equations' | 'window' | 'zoom' | 'trace' | 'calc' | 'graph' | 'plot';
@@ -19,7 +20,23 @@ export interface Settings {
   lineWidth: number;
   /** Use the on-screen keypad instead of the system keyboard on touch devices */
   keypadOnly: boolean;
+  // ---- TI-84 MODE screen ----
+  /** MATHPRINT (typeset) or CLASSIC (one-line text) */
+  display: 'mathprint' | 'classic';
+  /** FUNCTION / PARAMETRIC / POLAR / SEQ graphing */
+  graphMode: GraphMode;
+  graphStyle: 'thick' | 'dot-thick' | 'thin' | 'dot-thin';
+  /** SEQUENTIAL draws graphs one after another, SIMUL all at once */
+  drawOrder: 'sequential' | 'simul';
+  /** REAL, a+bi or re^(θi) */
+  complex: 'real' | 'rect' | 'polar';
+  /** FULL, HORIZONTAL (graph over home screen) or GRAPH-TABLE */
+  split: 'full' | 'horiz' | 'graph-table';
+  statDiagnostics: boolean;
+  statWizards: boolean;
 }
+
+export type GraphMode = 'func' | 'par' | 'pol' | 'seq';
 
 export interface HistoryEntry {
   id: string;
@@ -51,7 +68,7 @@ export interface GraphFn {
   visible: boolean;
 }
 
-export interface GraphWindow {
+export interface GraphWindow extends ModeWindow {
   xMin: number;
   xMax: number;
   yMin: number;
@@ -131,6 +148,8 @@ export interface AppState {
   tableStep: number;
   // Statistics
   lists: Record<ListName, number[]>;
+  /** Entries for PARAMETRIC, POLAR and SEQ graph modes */
+  modeFns: Record<ParamMode, ModeFn[]>;
   // Programs
   programs: Program[];
   editProgramId: string | null;
@@ -166,6 +185,9 @@ export interface AppState {
   deleteGraph: (id: string) => void;
   setTable: (start: number, step: number) => void;
   setList: (name: ListName, values: number[]) => void;
+  updateModeFn: (mode: ParamMode, id: string, p: Partial<ModeFn>) => void;
+  addModeFn: (mode: ParamMode) => void;
+  removeModeFn: (mode: ParamMode, id: string) => void;
   addProgram: (name: string, source?: string) => string;
   updateProgram: (id: string, p: Partial<Omit<Program, 'id'>>) => void;
   deleteProgram: (id: string) => void;
@@ -181,12 +203,20 @@ export interface AppState {
 const DEFAULT_SETTINGS: Settings = {
   theme: 'dark',
   angle: 'rad',
-  format: { mode: 'float', digits: 10 },
+  format: { mode: 'float', digits: 10, notation: 'normal', answers: 'auto', fracType: 'nd' },
   showGrid: true,
   showAxes: true,
   showLabels: true,
   lineWidth: 2.5,
   keypadOnly: true,
+  display: 'mathprint',
+  graphMode: 'func',
+  graphStyle: 'thick',
+  drawOrder: 'sequential',
+  complex: 'real',
+  split: 'full',
+  statDiagnostics: true,
+  statWizards: true,
 };
 
 const MAX_HISTORY = 300;
@@ -207,6 +237,15 @@ function initialData() {
     tableStart: -5,
     tableStep: 1,
     lists: SAMPLE_LISTS,
+    modeFns: {
+      par: [{ id: 'p1', a: '3cos(T)', b: '2sin(T)', color: PALETTE[0], visible: true }],
+      pol: [{ id: 'r1', a: '4sin(3θ)', color: PALETTE[1], visible: true }],
+      seq: [
+        { id: 's1', a: '0.5u(n-1)+3', b: '1', color: PALETTE[2], visible: true },
+        { id: 's2', a: '', b: '', color: PALETTE[3], visible: true },
+        { id: 's3', a: '', b: '', color: PALETTE[4], visible: true },
+      ],
+    } as Record<ParamMode, ModeFn[]>,
     programs: EXAMPLE_PROGRAMS.map((p, i) => ({ id: `ex${i}`, name: p.name, source: p.source, updatedAt: 0 })),
     editProgramId: null as string | null,
     screenFrom: 0,
@@ -320,6 +359,24 @@ export const useStore = create<AppState>()(
         deleteGraph: (id) => set((s) => ({ savedGraphs: s.savedGraphs.filter((g) => g.id !== id) })),
         setTable: (tableStart, tableStep) => set({ tableStart, tableStep }),
         setList: (name, values) => set((s) => ({ lists: { ...s.lists, [name]: values } })),
+        updateModeFn: (mode, id, p) =>
+          set((s) => ({ modeFns: { ...s.modeFns, [mode]: s.modeFns[mode].map((f) => (f.id === id ? { ...f, ...p } : f)) } })),
+        addModeFn: (mode) =>
+          set((s) => {
+            const list = s.modeFns[mode];
+            if (mode === 'seq' || list.length >= 6) return {};
+            const used = new Set(list.map((f) => f.color));
+            const color = PALETTE.find((c) => !used.has(c)) ?? PALETTE[list.length % PALETTE.length];
+            return { modeFns: { ...s.modeFns, [mode]: [...list, { id: uid(), a: '', b: mode === 'par' ? '' : undefined, color, visible: true }] } };
+          }),
+        removeModeFn: (mode, id) =>
+          set((s) => ({
+            modeFns: {
+              ...s.modeFns,
+              // sequences keep their three slots (u, v, w); clearing empties them
+              [mode]: mode === 'seq' ? s.modeFns.seq.map((f) => (f.id === id ? { ...f, a: '', b: '' } : f)) : s.modeFns[mode].filter((f) => f.id !== id),
+            },
+          })),
         addProgram: (name, source = '') => {
           const id = uid();
           set((s) => ({ programs: [...s.programs, { id, name, source, updatedAt: Date.now() }], editProgramId: id }));
@@ -355,6 +412,7 @@ export const useStore = create<AppState>()(
         tableStep: s.tableStep,
         lists: s.lists,
         programs: s.programs,
+        modeFns: s.modeFns,
         editProgramId: s.editProgramId,
         screenFrom: s.screenFrom,
       }),
@@ -365,6 +423,7 @@ export const useStore = create<AppState>()(
           ...p,
           settings: { ...current.settings, ...(p.settings ?? {}), format: { ...current.settings.format, ...(p.settings?.format ?? {}) } },
           lists: { ...current.lists, ...(p.lists ?? {}) },
+          modeFns: { ...current.modeFns, ...(p.modeFns ?? {}) },
         };
       },
     },

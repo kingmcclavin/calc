@@ -2,8 +2,9 @@ import { memo, useState } from 'react';
 import { ARROWS, KEYS, MATH_MENU, type KeyAction, type KeyDef, type KeyFace, type MenuId } from './keypad';
 import { Dialog } from './ui';
 import { PROGRAM_NAME_RE } from '../math/program';
+import { MODE_VARIABLE } from '../graph/modes';
 import { formatNumber } from '../math/format';
-import { fromStored, LIST_NAMES, useStore, type ThemePref } from '../state/store';
+import { fromStored, LIST_NAMES, useStore } from '../state/store';
 
 interface Props {
   onAction: (action: KeyAction, face: KeyFace) => void;
@@ -15,8 +16,8 @@ type AlphaState = 'off' | 'once' | 'lock';
 export const Keypad = memo(function Keypad({ onAction }: Props) {
   const [second, setSecond] = useState(false);
   const [alpha, setAlpha] = useState<AlphaState>('off');
-  const angle = useStore((s) => s.settings.angle);
   const [menu, setMenu] = useState<null | { id: MenuId; tab?: string }>(null);
+  const [wizard, setWizard] = useState<string | null>(null);
 
   const run = (a: KeyAction, face: KeyFace) => {
     if (a.type === 'second') {
@@ -48,6 +49,12 @@ export const Keypad = memo(function Keypad({ onAction }: Props) {
       return;
     }
     if (alpha === 'once' && k.id !== 'alpha') setAlpha('off');
+    // X,T,θ,n types the independent variable of the current graph mode
+    if (k.id === 'xt' && !second) {
+      const v = MODE_VARIABLE[useStore.getState().settings.graphMode];
+      onAction({ type: 'insert', text: v }, { label: v, action: { type: 'none' }, title: v });
+      return;
+    }
     run(second && k.second ? k.second.action : k.action, second && k.second ? k.second : k);
   };
 
@@ -114,11 +121,33 @@ export const Keypad = memo(function Keypad({ onAction }: Props) {
       <div className="keypad-status" aria-live="polite">
         {second && <span className="ind ind-2nd">2nd</span>}
         {alpha !== 'off' && <span className="ind ind-alpha">{alpha === 'lock' ? 'A-LOCK' : 'ALPHA'}</span>}
-        <span className="ind">{angle === 'rad' ? 'RADIAN' : 'DEGREE'}</span>
       </div>
-      {menu?.id === 'math' && <MathMenu initialTab={menu.tab} onClose={() => setMenu(null)} onPick={insert} />}
+      {menu?.id === 'math' && (
+        <MathMenu
+          initialTab={menu.tab}
+          onClose={() => setMenu(null)}
+          onPick={(text) => {
+            // STAT WIZARDS (MODE): fill in the arguments in a form, then paste
+            if (useStore.getState().settings.statWizards && WIZARDS[text]) {
+              setMenu(null);
+              setWizard(text);
+            }
+            else insert(text);
+          }}
+        />
+      )}
+      {wizard && (
+        <Wizard
+          name={wizard}
+          onClose={() => setWizard(null)}
+          onPaste={(text) => {
+            setWizard(null);
+            setMenu(null);
+            onAction({ type: 'insert', text }, { label: text, action: { type: 'none' }, title: text });
+          }}
+        />
+      )}
       {menu?.id === 'vars' && <VarsMenu onClose={() => setMenu(null)} onPick={insert} />}
-      {menu?.id === 'mode' && <ModeMenu onClose={() => setMenu(null)} />}
       {menu?.id === 'prgm' && <PrgmMenu onClose={() => setMenu(null)} onExec={(name) => insert(`prgm${name}`)} />}
       {menu?.id === 'apps' && (
         <AppsMenu
@@ -153,56 +182,6 @@ export function MathMenu({ onClose, onPick, initialTab }: { onClose: () => void;
           </button>
         ))}
       </div>
-    </Dialog>
-  );
-}
-
-function ModeMenu({ onClose }: { onClose: () => void }) {
-  const s = useStore((st) => st.settings);
-  const update = useStore((st) => st.updateSettings);
-  const row = (label: string, children: React.ReactNode) => (
-    <div className="setting-row">
-      <div style={{ fontWeight: 560 }}>{label}</div>
-      {children}
-    </div>
-  );
-  return (
-    <Dialog title="Mode" onClose={onClose}>
-      {row(
-        'Angle',
-        <div className="segmented" role="group" aria-label="Angle mode">
-          <button aria-pressed={s.angle === 'rad'} onClick={() => update({ angle: 'rad' })}>
-            RADIAN
-          </button>
-          <button aria-pressed={s.angle === 'deg'} onClick={() => update({ angle: 'deg' })}>
-            DEGREE
-          </button>
-        </div>,
-      )}
-      {row(
-        'Numbers',
-        <div className="segmented" role="group" aria-label="Number display">
-          <button aria-pressed={s.format.mode === 'float'} onClick={() => update({ format: { mode: 'float', digits: 10 } })}>
-            FLOAT
-          </button>
-          {[0, 1, 2, 3, 4, 5, 6].map((d) => (
-            <button key={d} aria-pressed={s.format.mode === 'fix' && s.format.digits === d} onClick={() => update({ format: { mode: 'fix', digits: d } })}>
-              {d}
-            </button>
-          ))}
-        </div>,
-      )}
-      {row(
-        'Theme',
-        <div className="segmented" role="group" aria-label="Theme">
-          {(['dark', 'light', 'system'] as ThemePref[]).map((t) => (
-            <button key={t} aria-pressed={s.theme === t} onClick={() => update({ theme: t })}>
-              {t.toUpperCase()}
-            </button>
-          ))}
-        </div>,
-      )}
-      <p className="muted small" style={{ marginBottom: 0 }}>More options (significant digits, graph display) are in Settings.</p>
     </Dialog>
   );
 }
@@ -372,6 +351,67 @@ function PrgmMenu({ onClose, onExec }: { onClose: () => void; onExec: (name: str
           </div>
         </div>
       )}
+    </Dialog>
+  );
+}
+
+/* ------------------------------------------------------------------------ */
+/* STAT WIZARDS: argument forms for distribution and calculus functions        */
+/* ------------------------------------------------------------------------ */
+
+type WizardField = { label: string; value?: string };
+const WIZARDS: Record<string, { title: string; fields: WizardField[] }> = {
+  'normalpdf(': { title: 'normalpdf', fields: [{ label: 'x value' }, { label: 'μ', value: '0' }, { label: 'σ', value: '1' }] },
+  'normalcdf(': { title: 'normalcdf', fields: [{ label: 'lower' }, { label: 'upper' }, { label: 'μ', value: '0' }, { label: 'σ', value: '1' }] },
+  'invNorm(': { title: 'invNorm', fields: [{ label: 'area' }, { label: 'μ', value: '0' }, { label: 'σ', value: '1' }] },
+  'binompdf(': { title: 'binompdf', fields: [{ label: 'trials' }, { label: 'p' }, { label: 'x value' }] },
+  'binomcdf(': { title: 'binomcdf', fields: [{ label: 'trials' }, { label: 'p' }, { label: 'x value' }] },
+  'poissonpdf(': { title: 'poissonpdf', fields: [{ label: 'μ' }, { label: 'x value' }] },
+  'poissoncdf(': { title: 'poissoncdf', fields: [{ label: 'μ' }, { label: 'x value' }] },
+  'nDeriv(': { title: 'nDeriv', fields: [{ label: 'expression' }, { label: 'variable', value: 'x' }, { label: 'at value' }] },
+  'fnInt(': { title: 'fnInt', fields: [{ label: 'expression' }, { label: 'variable', value: 'x' }, { label: 'lower' }, { label: 'upper' }] },
+  'randInt(': { title: 'randInt', fields: [{ label: 'lower' }, { label: 'upper' }] },
+};
+
+function Wizard({ name, onClose, onPaste }: { name: string; onClose: () => void; onPaste: (text: string) => void }) {
+  const spec = WIZARDS[name];
+  const [values, setValues] = useState(() => spec.fields.map((f) => f.value ?? ''));
+  const missing = values.some((v) => !v.trim());
+  const paste = () => {
+    if (!missing) onPaste(`${name}${values.map((v) => v.trim()).join(',')})`);
+  };
+  return (
+    <Dialog
+      title={spec.title}
+      onClose={onClose}
+      footer={
+        <>
+          <button className="btn" onClick={onClose}>
+            Cancel
+          </button>
+          <button className="btn primary" disabled={missing} onClick={paste}>
+            Paste
+          </button>
+        </>
+      }
+    >
+      <div className="form-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))' }}>
+        {spec.fields.map((f, i) => (
+          <label key={f.label} className="field">
+            <span>{f.label}</span>
+            <input
+              className="input"
+              value={values[i]}
+              autoFocus={i === 0}
+              onChange={(e) => setValues(values.map((v, j) => (j === i ? e.target.value : v)))}
+              onKeyDown={(e) => e.key === 'Enter' && paste()}
+            />
+          </label>
+        ))}
+      </div>
+      <p className="muted small" style={{ marginBottom: 0 }}>
+        STAT WIZARDS are on (MODE screen). Turn them off to paste the bare function instead.
+      </p>
     </Dialog>
   );
 }

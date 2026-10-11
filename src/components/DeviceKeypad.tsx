@@ -14,7 +14,8 @@ import { useStore } from '../state/store';
  */
 export type KeyHandler = (action: KeyAction, face: KeyFace) => boolean;
 
-let viewHandler: KeyHandler | null = null;
+/** Handlers of the screens currently shown; the most recently mounted is asked first (split screens show two). */
+const handlers: KeyHandler[] = [];
 
 /** Let the active section handle keypad presses. Return true when handled. */
 export function useKeypadHandler(fn: KeyHandler) {
@@ -22,11 +23,17 @@ export function useKeypadHandler(fn: KeyHandler) {
   ref.current = fn;
   useEffect(() => {
     const h: KeyHandler = (a, f) => ref.current(a, f);
-    viewHandler = h;
+    handlers.push(h);
     return () => {
-      if (viewHandler === h) viewHandler = null;
+      const i = handlers.indexOf(h);
+      if (i >= 0) handlers.splice(i, 1);
     };
   }, []);
+}
+
+function runHandlers(a: KeyAction, face: KeyFace): boolean {
+  for (let i = handlers.length - 1; i >= 0; i--) if (handlers[i](a, face)) return true;
+  return false;
 }
 
 const EDIT_TYPES = new Set(['insert', 'backspace', 'delete', 'clear', 'left', 'right', 'home', 'end']);
@@ -58,7 +65,7 @@ export function DeviceKeypad() {
       st.navigate(a.view, a.intent);
       return;
     }
-    if (viewHandler?.(a, face)) return;
+    if (runHandlers(a, face)) return;
     if (st.view === 'calc') return;
 
     const field = focusedField();

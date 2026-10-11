@@ -64,7 +64,7 @@ export function toTex(n: Node): string {
     case 'num':
       return numTex(n.text);
     case 'const':
-      return n.name === 'pi' ? '\\pi' : 'e';
+      return n.name === 'pi' ? '\\pi' : n.name === 'i' ? 'i' : 'e';
     case 'var':
       return varTex(n.name);
     case 'list':

@@ -52,7 +52,7 @@ export const KEYS: KeyDef[] = [
 
   // Rows 2–3 (left three columns; arrows on the right)
   { id: '2nd', label: '2nd', variant: 'shift', action: { type: 'second' }, title: 'Second function: use the amber label on the next key' },
-  { id: 'mode', label: 'MODE', variant: 'mod', action: { type: 'menu', menu: 'mode' }, title: 'Angle mode, number display and theme', second: { label: 'QUIT', action: { type: 'quit' }, title: 'Clear the entry line and return to the bottom of the screen' } },
+  { id: 'mode', label: 'MODE', variant: 'mod', action: { type: 'nav', view: 'mode' }, title: 'MODE screen: number display, angle, graph type, complex numbers and more', second: { label: 'QUIT', action: { type: 'quit' }, title: 'Clear the entry line and return to the bottom of the screen' } },
   { id: 'del', label: 'DEL', variant: 'mod', action: { type: 'backspace' }, title: 'Delete before cursor (Backspace)', second: { label: 'DEL→', action: { type: 'delete' }, title: 'Delete after cursor' } },
   { id: 'alpha', label: 'ALPHA', variant: 'alpha', action: { type: 'alpha' }, title: 'Type a letter: the green label on the next key', second: { label: 'A-LOCK', action: { type: 'alphaLock' }, title: 'Keep typing letters until ALPHA is pressed again' } },
   { id: 'xt', label: 'X,T,θ,n', variant: 'mod', action: ins('x'), title: 'Variable x' },
@@ -103,7 +103,7 @@ export const KEYS: KeyDef[] = [
   // Row 10
   { id: 'ans', label: 'ANS', variant: 'mod', action: ins('Ans'), title: 'Previous answer', second: { label: 'HIST', action: { type: 'nav', view: 'history' }, title: 'History & saved graphs' } },
   { id: '0', label: '0', variant: 'num', action: ins('0'), title: '0', second: { label: 'CATALOG', action: { type: 'menu', menu: 'math' }, title: 'All functions' } },
-  { id: 'dot', label: '.', ariaLabel: 'Decimal point', variant: 'num', action: ins('.'), title: 'Decimal point' },
+  { id: 'dot', label: '.', ariaLabel: 'Decimal point', variant: 'num', action: ins('.'), title: 'Decimal point', second: { label: 'i', action: ins('i'), title: 'Imaginary unit i (complex numbers)' } },
   { id: 'neg', label: '(−)', ariaLabel: 'Negative', variant: 'num', action: ins('-'), title: 'Negative sign', second: { label: 'ANS', action: ins('Ans'), title: 'Previous answer' } },
   { id: 'enter', label: 'ENTER', variant: 'enter', action: { type: 'enter' }, title: 'Evaluate, or paste the highlighted line (Enter)', second: { label: 'ENTRY', action: { type: 'entry' }, title: 'Recall the previous entry' } },
 ];
@@ -207,6 +207,18 @@ export const MATH_MENU: MenuTab[] = [
       { label: 'sum(', insert: 'sum(', description: 'Sum of a list' },
       { label: 'prod(', insert: 'prod(', description: 'Product of a list' },
       { label: 'dim(', insert: 'dim(', description: 'Length of a list' },
+    ],
+  },
+  {
+    id: 'cplx',
+    label: 'Complex',
+    items: [
+      { label: 'i', insert: 'i', description: 'Imaginary unit (also 2nd .)' },
+      { label: 'conj(', insert: 'conj(', description: 'Complex conjugate' },
+      { label: 'real(', insert: 'real(', description: 'Real part' },
+      { label: 'imag(', insert: 'imag(', description: 'Imaginary part' },
+      { label: 'angle(', insert: 'angle(', description: 'Argument (angle)' },
+      { label: 'abs(', insert: 'abs(', description: 'Modulus |z|' },
     ],
   },
   {

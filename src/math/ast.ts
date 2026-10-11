@@ -5,7 +5,7 @@ export type BinaryOp = '+' | '-' | '*' | '/' | '^' | 'nPr' | 'nCr' | RelOp | Log
 
 export type Node =
   | { type: 'num'; value: number; text: string }
-  | { type: 'const'; name: 'pi' | 'e' }
+  | { type: 'const'; name: 'pi' | 'e' | 'i' }
   | { type: 'var'; name: string } // x, A–Z, θ, Ans
   | { type: 'list'; items: Node[] }
   | { type: 'unary'; op: '-' | '+'; arg: Node }

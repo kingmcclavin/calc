@@ -199,6 +199,14 @@ export function applyNumeric(name: string, a: number[], angle: AngleMode, random
       return S.poissonCdf(a[0], a[1]);
     case 'not':
       return x === 0 ? 1 : 0;
+    // complex helpers on real numbers
+    case 'conj':
+    case 'real':
+      return x;
+    case 'imag':
+      return 0;
+    case 'angle':
+      return x < 0 ? Math.PI * fromRad : 0;
     case 'rand':
       return random();
     case 'randint': {
@@ -529,6 +537,7 @@ export class Evaluator {
         return scalar(node.value, r);
       }
       case 'const':
+        if (node.name === 'i') fail('NONREAL', 'i is the imaginary unit — this needs complex arithmetic');
         return scalar(node.name === 'pi' ? Math.PI : Math.E);
       case 'var': {
         if (node.name in this.overrides) return this.overrides[node.name];
@@ -772,7 +781,7 @@ export function compileWith(node: Node, ctx: EvalContext, bound: string[], overr
         return () => v;
       }
       case 'const': {
-        const v = n.name === 'pi' ? Math.PI : Math.E;
+        const v = n.name === 'pi' ? Math.PI : n.name === 'e' ? Math.E : NaN;
         return () => v;
       }
       case 'var': {

@@ -304,6 +304,7 @@ function TwoVarPanel() {
   const fmt = useStore((s) => s.settings.format);
   const settings = useStore((s) => s.settings);
   const addFunction = useStore((s) => s.addFunction);
+  const diagnostics = useStore((s) => s.settings.statDiagnostics);
   const [xl, setXl] = useState<ListName>('L1');
   const [yl, setYl] = useState<ListName>('L2');
   const [model, setModel] = useState<RegressionKind>('linear');
@@ -357,8 +358,8 @@ function TwoVarPanel() {
               {Object.entries(reg.coef).map(([k, v]) => (
                 <Stat key={k} k={k} v={f(v)} />
               ))}
-              {reg.r !== undefined && <Stat k="r" v={f(reg.r)} title={model === 'linear' ? 'Correlation coefficient' : 'Correlation of the linearised data'} />}
-              <Stat k="r²" v={f(reg.r2)} title="Coefficient of determination" />
+              {diagnostics && reg.r !== undefined && <Stat k="r" v={f(reg.r)} title={model === 'linear' ? 'Correlation coefficient' : 'Correlation of the linearised data'} />}
+              {diagnostics && <Stat k="r²" v={f(reg.r2)} title="Coefficient of determination" />}
               <Stat k="n" v={f(result.two.n)} />
               <Stat k="x̄" v={f(result.two.meanX)} />
               <Stat k="ȳ" v={f(result.two.meanY)} />
@@ -366,6 +367,7 @@ function TwoVarPanel() {
               <Stat k="Sy" v={f(result.two.sy)} />
               <Stat k="Σxy" v={f(result.two.sumXY)} />
             </div>
+            {!diagnostics && <p className="muted small" style={{ margin: 0 }}>r and r² are hidden — turn STAT DIAGNOSTICS on in MODE to see them.</p>}
             <div className="row wrap">
               <button
                 className="btn primary sm"

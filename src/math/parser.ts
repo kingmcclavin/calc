@@ -271,6 +271,8 @@ function splitIdentifier(
     }
     if (ch === 'x' || ch === 'X') toks.push({ type: 'ident', value: 'x', pos });
     else if (ch === 'e') toks.push({ type: 'ident', value: 'e', pos });
+    // lower-case i is the imaginary unit (2nd . on the TI-84); ALPHA I gives the variable I
+    else if (ch === 'i') toks.push({ type: 'ident', value: 'i', pos });
     else if (ch === 'θ') toks.push({ type: 'ident', value: 'θ', pos });
     else toks.push({ type: 'ident', value: ch.toUpperCase(), pos });
     j++;
@@ -447,6 +449,7 @@ class Parser {
       case 'ident': {
         if (t.value === 'pi') return { type: 'const', name: 'pi' };
         if (t.value === 'e') return { type: 'const', name: 'e' };
+        if (t.value === 'i') return { type: 'const', name: 'i' };
         if (/^Y\d+$/.test(t.value)) {
           // Y1(…) evaluates the function; bare Y1 means Y1(x)
           if (this.peek().type === 'lparen') {

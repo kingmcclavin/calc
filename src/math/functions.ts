@@ -81,6 +81,10 @@ export const FUNCTIONS: FnInfo[] = [
   F('poissonpdf', 2, 2, 'poissonpdf(μ, k): P(X = k) for X ~ Poisson(μ)', { tex: '\\operatorname{poissonpdf}', insert: 'poissonpdf(' }),
   F('poissoncdf', 2, 2, 'poissoncdf(μ, k): P(X ≤ k) for X ~ Poisson(μ)', { tex: '\\operatorname{poissoncdf}', insert: 'poissoncdf(' }),
   F('not', 1, 1, 'not(x): 1 if x is 0 (false), otherwise 0', { tex: '\\operatorname{not}' }),
+  F('conj', 1, 1, 'Complex conjugate', { tex: '\\operatorname{conj}' }),
+  F('real', 1, 1, 'Real part of a complex number', { tex: '\\operatorname{real}' }),
+  F('imag', 1, 1, 'Imaginary part of a complex number', { tex: '\\operatorname{imag}' }),
+  F('angle', 1, 1, 'Argument (angle) of a complex number', { tex: '\\operatorname{angle}' }),
   F('rand', 0, 0, 'Random number in [0, 1)', { tex: '\\operatorname{rand}' }),
   F('randint', 2, 2, 'randInt(a, b): random integer between a and b', { tex: '\\operatorname{randInt}', insert: 'randInt(' }),
 ];

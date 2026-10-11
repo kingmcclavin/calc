@@ -9,6 +9,7 @@ import { GraphView } from './views/GraphView';
 import { HistoryView } from './views/HistoryView';
 import { SettingsView } from './views/SettingsView';
 import { ProgramsView } from './views/ProgramsView';
+import { ModeView } from './views/ModeView';
 import { SolverView } from './views/SolverView';
 import { StatsView } from './views/StatsView';
 import { TableView } from './views/TableView';
@@ -33,6 +34,7 @@ const NAV: NavItem[] = [
 
 const SUBTITLES: Record<ViewId, string> = {
   calc: 'Scientific calculator',
+  mode: 'Mode settings',
   yeq: 'Y= — functions to graph',
   graph: 'Graph — press Y= to edit functions',
   table: 'Function values',
@@ -81,7 +83,7 @@ export function App() {
   }, [setView]);
 
   // Y= and GRAPH are reached with the keypad (as on a TI-84), so they are not in the sidebar
-  const SCREEN_NAMES: Partial<Record<ViewId, string>> = { yeq: 'Y=', graph: 'Graph' };
+  const SCREEN_NAMES: Partial<Record<ViewId, string>> = { mode: 'Mode', yeq: 'Y=', graph: 'Graph' };
   const current = NAV.find((n) => n.id === view) ?? { ...NAV[0], id: view, label: SCREEN_NAMES[view] ?? NAV[0].label };
   const isDark = theme === 'dark' || (theme === 'system' && !window.matchMedia('(prefers-color-scheme: light)').matches);
 
@@ -156,6 +158,7 @@ export function App() {
                 {view === 'history' && <HistoryView />}
                 {view === 'settings' && <SettingsView />}
                 {view === 'programs' && <ProgramsView />}
+                {view === 'mode' && <ModeView />}
               </ErrorBoundary>
             </main>
           </div>

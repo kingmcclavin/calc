@@ -6,10 +6,59 @@ import { clampWindow, niceStep, tickLabel, zoomWindow } from './viewport';
 export interface PlotCurve {
   id: string;
   label: string;
-  f: (x: number) => number;
+  /** y = f(x) curve (FUNCTION mode) */
+  f?: (x: number) => number;
+  /** parametric curve (PARAMETRIC and POLAR modes): drawn for t = tMin … tMax in steps of tStep */
+  param?: { x: (t: number) => number; y: (t: number) => number; tMin: number; tMax: number; tStep: number };
+  /** discrete points (SEQ mode); the trace parameter is the point's x (n) */
+  points?: Array<{ x: number; y: number }>;
   color: string;
   dashed?: boolean;
 }
+
+export type GraphStyle = 'thick' | 'dot-thick' | 'thin' | 'dot-thin';
+
+/** Point on a curve for a trace parameter s (x for functions, t/θ for parametric/polar, n for sequences). */
+export function curvePoint(c: PlotCurve, s: number): { x: number; y: number } {
+  if (c.f) return { x: s, y: c.f(s) };
+  if (c.param) return { x: c.param.x(s), y: c.param.y(s) };
+  const p = c.points?.find((q) => q.x === Math.round(s));
+  return p ?? { x: NaN, y: NaN };
+}
+
+/** One trace step (◀ ▶) for a curve: 1/100 of the window for functions, tStep or 1 otherwise. */
+export function traceStep(c: PlotCurve | undefined, w: GraphWindow): number {
+  if (!c || c.f) return (w.xMax - w.xMin) / 100;
+  if (c.param) return c.param.tStep;
+  return 1;
+}
+
+/** Keep a trace parameter inside a curve's domain (t range or first/last n). */
+export function clampTrace(c: PlotCurve | undefined, s: number): number {
+  if (c?.param) return Math.min(c.param.tMax, Math.max(c.param.tMin, s));
+  if (c?.points?.length) return Math.min(c.points[c.points.length - 1].x, Math.max(c.points[0].x, Math.round(s)));
+  return s;
+}
+
+/** Sample a parametric curve into polylines, breaking at undefined points. */
+function sampleParam(p: NonNullable<PlotCurve['param']>): Polyline[] {
+  const out: Polyline[] = [];
+  let cur: number[] = [];
+  const n = Math.min(20000, Math.max(1, Math.ceil((p.tMax - p.tMin) / p.tStep)));
+  for (let i = 0; i <= n; i++) {
+    const t = i === n ? p.tMax : p.tMin + i * p.tStep;
+    const x = p.x(t);
+    const y = p.y(t);
+    if (Number.isFinite(x) && Number.isFinite(y)) cur.push(x, y);
+    else if (cur.length) {
+      out.push(Float64Array.from(cur));
+      cur = [];
+    }
+  }
+  if (cur.length) out.push(Float64Array.from(cur));
+  return out;
+}
+
 export interface PlotPoint {
   x: number;
   y: number;
@@ -51,6 +100,10 @@ interface Props {
   showAxes?: boolean;
   showLabels?: boolean;
   lineWidth?: number;
+  /** TI MODE line style */
+  graphStyle?: GraphStyle;
+  /** TI MODE draw order; when set, curves are drawn with an animation like the TI-84 */
+  drawOrder?: 'sequential' | 'simul';
   ariaLabel?: string;
   onSize?: (w: number, h: number) => void;
 }
@@ -99,6 +152,8 @@ export function GraphCanvas(props: Props) {
     showAxes = true,
     showLabels = true,
     lineWidth = 2.5,
+    graphStyle = 'thick',
+    drawOrder,
     ariaLabel = 'Graph',
     onSize,
   } = props;
@@ -179,7 +234,32 @@ export function GraphCanvas(props: Props) {
   );
 
   /* ---------------------------------- drawing --------------------------------- */
-  const sampleCache = useRef(new Map<string, { key: string; f: (x: number) => number; lines: Polyline[] }>());
+  const sampleCache = useRef(new Map<string, { key: string; src: unknown; lines: Polyline[] }>());
+
+  // Draw-order animation: replay whenever the set of graphed functions changes (not on pan/zoom)
+  const [reveal, setReveal] = useState(1);
+  const curvesKey = curves.map((c) => c.id).join('|');
+  const sources = curves.map((c) => c.f ?? c.param ?? c.points);
+  const lastSources = useRef<unknown[] | null>(null);
+  useEffect(() => {
+    const prev = lastSources.current;
+    lastSources.current = sources;
+    const changed = !prev || prev.length !== sources.length || prev.some((p, i) => p !== sources[i]);
+    if (!drawOrder || !changed || !curves.length || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+    const duration = drawOrder === 'sequential' ? Math.min(400 * curves.length, 1600) : 500;
+    let start: number | null = null;
+    let raf = 0;
+    const tick = (ts: number) => {
+      if (start === null) start = ts;
+      const p = Math.min(1, (ts - start) / duration);
+      setReveal(p);
+      if (p < 1) raf = requestAnimationFrame(tick);
+    };
+    setReveal(0);
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [curvesKey, drawOrder, ...sources]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -361,32 +441,73 @@ export function GraphCanvas(props: Props) {
     const seen = new Set<string>();
     ctx.lineJoin = 'round';
     ctx.lineCap = 'round';
-    for (const c of curves) {
+    const thin = graphStyle === 'thin' || graphStyle === 'dot-thin';
+    const dots = graphStyle === 'dot-thick' || graphStyle === 'dot-thin';
+    const lw = thin ? Math.max(1, lineWidth / 2) : lineWidth;
+    curves.forEach((c, ci) => {
       seen.add(c.id);
+      const src = c.f ?? c.param ?? c.points;
+      const key = c.f ? optsKey : 'static';
       const cached = sampleCache.current.get(c.id);
       let polylines: Polyline[];
-      if (cached && cached.key === optsKey && cached.f === c.f) polylines = cached.lines;
+      if (cached && cached.key === key && cached.src === src) polylines = cached.lines;
       else {
-        polylines = sampleFunction(c.f, opts);
-        sampleCache.current.set(c.id, { key: optsKey, f: c.f, lines: polylines });
+        polylines = c.f ? sampleFunction(c.f, opts) : c.param ? sampleParam(c.param) : (c.points ?? []).map((q) => Float64Array.from([q.x, q.y]));
+        sampleCache.current.set(c.id, { key, src, lines: polylines });
       }
-      ctx.strokeStyle = c.color;
-      ctx.lineWidth = lineWidth;
-      ctx.setLineDash(c.dashed ? [7, 6] : []);
-      for (const pl of polylines) {
+      // how much of this curve to show during the draw animation
+      const n = curves.length;
+      const part = reveal >= 1 ? 1 : drawOrder === 'sequential' ? Math.min(1, Math.max(0, reveal * n - ci)) : reveal;
+      if (part <= 0) return;
+      ctx.save();
+      if (part < 1 && c.f) {
         ctx.beginPath();
-        if (pl.length === 2) {
-          // isolated point
-          ctx.fillStyle = c.color;
-          ctx.arc(X(pl[0]), Y(pl[1]), lineWidth / 1.5, 0, Math.PI * 2);
+        ctx.rect(0, 0, W * part, H);
+        ctx.clip();
+      }
+      // parametric / point curves are revealed along their parameter
+      const total = polylines.reduce((acc, pl) => acc + pl.length, 0);
+      let budget = part < 1 && !c.f ? Math.floor((total * part) / 2) * 2 : Infinity;
+      ctx.strokeStyle = c.color;
+      ctx.fillStyle = c.color;
+      ctx.lineWidth = lw;
+      ctx.setLineDash(c.dashed ? [7, 6] : []);
+      if (dots && c.f) {
+        // TI dot style: one point per pixel column (every other column for DOT-THICK)
+        const stepPx = thin ? 1 : 2;
+        const r = thin ? 0.9 : 1.6;
+        for (let px = 0; px <= W * part; px += stepPx) {
+          const y = c.f(w.xMin + (px / W) * (w.xMax - w.xMin));
+          if (!Number.isFinite(y)) continue;
+          ctx.beginPath();
+          ctx.arc(px, Y(y), r, 0, Math.PI * 2);
           ctx.fill();
+        }
+        ctx.restore();
+        return;
+      }
+      for (const full of polylines) {
+        if (budget <= 0) break;
+        const pl = budget < full.length ? full.subarray(0, budget) : full;
+        budget -= pl.length;
+        if (dots || pl.length === 2 || c.points) {
+          // dot styles (and sequences) plot the computed points only
+          const r = c.points ? lw * 1.3 : thin ? 0.9 : 1.6;
+          const stride = c.f && !c.points ? Math.max(2, Math.round(pl.length / Math.max(2, W)) * 2) : 2;
+          for (let i = 0; i < pl.length; i += stride) {
+            ctx.beginPath();
+            ctx.arc(X(pl[i]), Y(pl[i + 1]), pl.length === 2 && !dots ? lw / 1.5 : r, 0, Math.PI * 2);
+            ctx.fill();
+          }
           continue;
         }
+        ctx.beginPath();
         ctx.moveTo(X(pl[0]), Y(pl[1]));
         for (let i = 2; i < pl.length; i += 2) ctx.lineTo(X(pl[i]), Y(pl[i + 1]));
         ctx.stroke();
       }
-    }
+      ctx.restore();
+    });
     ctx.setLineDash([]);
     for (const k of [...sampleCache.current.keys()]) if (!seen.has(k)) sampleCache.current.delete(k);
 
@@ -466,9 +587,10 @@ export function GraphCanvas(props: Props) {
     // ---- trace cursor
     if (trace) {
       const curve = trace.curveId ? curves.find((c) => c.id === trace.curveId) : null;
-      const ty = curve ? curve.f(trace.x) : trace.y ?? NaN;
+      const pt = curve ? curvePoint(curve, trace.x) : { x: trace.x, y: trace.y ?? NaN };
+      const ty = pt.y;
       const color = curve ? curve.color : th.text;
-      const px = X(trace.x);
+      const px = X(pt.x);
       ctx.save();
       ctx.strokeStyle = color;
       ctx.globalAlpha = 0.45;
@@ -484,9 +606,9 @@ export function GraphCanvas(props: Props) {
       }
       ctx.stroke();
       ctx.restore();
-      if (Number.isFinite(ty)) drawPoint({ x: trace.x, y: ty, color, emphasis: true });
+      if (Number.isFinite(ty) && Number.isFinite(pt.x)) drawPoint({ x: pt.x, y: ty, color, emphasis: true });
     }
-  }, [size, live, curves, points, scatter, shade, tangent, trace, showGrid, showAxes, showLabels, lineWidth, themeTick]);
+  }, [size, live, curves, points, scatter, shade, tangent, trace, showGrid, showAxes, showLabels, lineWidth, graphStyle, drawOrder, reveal, themeTick]);
 
   /* ------------------------------- interactions ------------------------------- */
   const pointers = useRef(new Map<number, { x: number; y: number }>());
@@ -505,18 +627,37 @@ export function GraphCanvas(props: Props) {
     return { x: e.clientX - r.left, y: e.clientY - r.top };
   };
 
-  /** Pick the curve nearest to a pixel position (vertical distance at that x). */
+  /** Pick the curve nearest to a pixel position; returns its trace parameter. */
   const pickCurve = useCallback(
     (px: number, py: number, radius: number) => {
       const [x] = toWorld(px, py);
-      let best: { id: string; d: number } | null = null;
+      let best: { id: string; d: number; s: number } | null = null;
       for (const c of curves) {
-        const y = c.f(x);
-        if (!Number.isFinite(y)) continue;
-        const d = Math.abs(toPx(x, y)[1] - py);
-        if (d <= radius && (!best || d < best.d)) best = { id: c.id, d };
+        if (c.f) {
+          const y = c.f(x);
+          if (!Number.isFinite(y)) continue;
+          const d = Math.abs(toPx(x, y)[1] - py);
+          if (d <= radius && (!best || d < best.d)) best = { id: c.id, d, s: x };
+          continue;
+        }
+        // parametric / sequence: nearest computed point
+        const candidates: Array<[number, number, number]> = [];
+        if (c.param) {
+          const { tMin, tMax, tStep } = c.param;
+          const n = Math.min(4000, Math.ceil((tMax - tMin) / tStep));
+          for (let i = 0; i <= n; i++) {
+            const t = Math.min(tMax, tMin + i * tStep);
+            candidates.push([t, c.param.x(t), c.param.y(t)]);
+          }
+        } else for (const q of c.points ?? []) candidates.push([q.x, q.x, q.y]);
+        for (const [s, qx, qy] of candidates) {
+          if (!Number.isFinite(qx) || !Number.isFinite(qy)) continue;
+          const [sx, sy] = toPx(qx, qy);
+          const d = Math.hypot(sx - px, sy - py);
+          if (d <= radius && (!best || d < best.d)) best = { id: c.id, d, s };
+        }
       }
-      return best ? { id: best.id, x } : null;
+      return best ? { id: best.id, x: best.s } : null;
     },
     [curves, toPx, toWorld],
   );
@@ -549,9 +690,9 @@ export function GraphCanvas(props: Props) {
     let mode: 'pan' | 'trace' = 'pan';
     if (trace?.curveId) {
       const c = curves.find((k) => k.id === trace.curveId);
-      const ty = c?.f(trace.x);
-      if (c && ty !== undefined && Number.isFinite(ty)) {
-        const [tx, tyPx] = toPx(trace.x, ty);
+      const pt = c ? curvePoint(c, trace.x) : null;
+      if (c && pt && Number.isFinite(pt.y) && Number.isFinite(pt.x)) {
+        const [tx, tyPx] = toPx(pt.x, pt.y);
         if (Math.hypot(tx - p.x, tyPx - p.y) < (e.pointerType === 'touch' ? 36 : 22)) mode = 'trace';
       }
     }
@@ -586,6 +727,12 @@ export function GraphCanvas(props: Props) {
     if (!g.moved && Math.hypot(dx, dy) < 5) return;
     g.moved = true;
     if (g.mode === 'trace') {
+      const c = curves.find((k) => k.id === trace!.curveId);
+      if (c && !c.f) {
+        const hit = pickCurve(p.x, p.y, 80);
+        if (hit && hit.id === c.id) onTrace?.({ curveId: c.id, x: hit.x });
+        return;
+      }
       const [x] = toWorld(p.x, p.y);
       onTrace?.({ curveId: trace!.curveId, x });
       return;
@@ -665,11 +812,12 @@ export function GraphCanvas(props: Props) {
     };
     if (trace?.curveId && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
       e.preventDefault();
-      const step = (xr / 100) * big * (e.key === 'ArrowLeft' ? -1 : 1);
-      const x = trace.x + step;
+      const c = curves.find((k) => k.id === trace.curveId);
+      const step = traceStep(c, w) * big * (e.key === 'ArrowLeft' ? -1 : 1);
+      const x = clampTrace(c, trace.x + step);
       onTrace?.({ curveId: trace.curveId, x });
-      // scroll the window when the cursor leaves it
-      if (x < w.xMin || x > w.xMax) setW({ ...w, xMin: w.xMin + step, xMax: w.xMax + step });
+      // scroll the window when a function trace leaves it
+      if (c?.f && (x < w.xMin || x > w.xMax)) setW({ ...w, xMin: w.xMin + step, xMax: w.xMax + step });
       return;
     }
     if (trace?.curveId && (e.key === 'ArrowUp' || e.key === 'ArrowDown') && curves.length) {

@@ -1,9 +1,12 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { GraphCanvas, type PlotCurve, type PlotPoint, type TraceState } from '../graph/GraphCanvas';
+import { clampTrace, curvePoint, GraphCanvas, traceStep, type PlotCurve, type PlotPoint, type TraceState } from '../graph/GraphCanvas';
+import { compileMode, modeLabels, modeWindow, type ParamMode } from '../graph/modes';
 import { runAnalysis, TOOLS, type AnalysisOutput, type Tool } from '../graph/analysis';
 import { squareWindow, zoomWindow, ZOOM_PRESETS, type ZoomPreset } from '../graph/viewport';
 import { MathInput } from '../components/MathInput';
 import { focusedField, useKeypadHandler } from '../components/DeviceKeypad';
+import { CalculateView } from './CalculateView';
+import { TableView } from './TableView';
 import { SymbolBar } from '../components/SymbolBar';
 import { Tex } from '../components/Tex';
 import { Dialog, NumberField, toast } from '../components/ui';
@@ -54,13 +57,25 @@ export function GraphView({ screen }: { screen: 'equations' | 'graph' }) {
   const [tool, setTool] = useState<Tool | null>(null);
   const canvasSize = useRef({ w: 800, h: 600 });
 
+  const graphMode = settings.graphMode;
+  const split = screen === 'graph' ? settings.split : 'full';
+  const modeFns = useStore((s) => s.modeFns);
+  const w0 = graphWindow;
+  const compiledMode = useMemo(
+    () => (graphMode === 'func' ? null : compileMode(graphMode, modeFns[graphMode], ctx, w0)),
+    // only the T/θ/n settings matter here, so panning does not recompute (or re-animate) the curves
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [graphMode, modeFns, ctx, w0.tMin, w0.tMax, w0.tStep, w0.thetaMin, w0.thetaMax, w0.thetaStep, w0.nMin, w0.nMax],
+  );
   const curves: PlotCurve[] = useMemo(
     () =>
-      parsed
-        .filter((p) => p.fn.visible && p.f)
-        .map((p) => ({ id: p.fn.id, label: p.name, f: p.f!, color: p.fn.color })),
-    [parsed],
+      compiledMode
+        ? compiledMode.curves
+        : parsed.filter((p) => p.fn.visible && p.f).map((p) => ({ id: p.fn.id, label: p.name, f: p.f!, color: p.fn.color })),
+    [parsed, compiledMode],
   );
+  /** Where tracing starts on a curve: the middle of the screen, or the start of T/θ/n. */
+  const traceStart = (c: PlotCurve, w: GraphWindow) => (c.f ? (w.xMin + w.xMax) / 2 : c.param ? c.param.tMin : c.points?.[0]?.x ?? 0);
 
   // Requests from the Table view: jump to a point
   useEffect(() => {
@@ -70,6 +85,8 @@ export function GraphView({ screen }: { screen: 'equations' | 'graph' }) {
     setPane('graph');
     setTrace({ curveId: fnId, x });
     const w = useStore.getState().window;
+    // in PARAMETRIC/POLAR/SEQ modes the value is T, θ or n, not an x position
+    if (useStore.getState().settings.graphMode !== 'func') return;
     const p = parsed.find((q) => q.fn.id === fnId);
     const y = p?.f?.(x);
     let nw = w;
@@ -139,7 +156,7 @@ export function GraphView({ screen }: { screen: 'equations' | 'graph' }) {
           let hi = -Infinity;
           for (const c of curves) {
             for (let i = 0; i <= 400; i++) {
-              const y = c.f(w.xMin + ((w.xMax - w.xMin) * i) / 400);
+              const y = c.f ? c.f(w.xMin + ((w.xMax - w.xMin) * i) / 400) : c.param ? c.param.y(c.param.tMin + ((c.param.tMax - c.param.tMin) * i) / 400) : c.points?.[i]?.y ?? NaN;
               if (Number.isFinite(y) && Math.abs(y) < 1e9) {
                 lo = Math.min(lo, y);
                 hi = Math.max(hi, y);
@@ -166,16 +183,23 @@ export function GraphView({ screen }: { screen: 'equations' | 'graph' }) {
 
   // Keypad arrows drive the graph like a TI-84: trace along curves, or pan when not tracing
   useKeypadHandler((a) => {
-    if (focusedField() || pane === 'list') return false;
+    if (pane === 'list') return false;
+    const field = focusedField();
+    // the home screen shown in a HORIZONTAL split keeps its entry line focused
+    if (field && !field.closest('.split-pane')) return false;
+    // GRAPH-TABLE split: ▲▼ scroll the table, ◀▶ trace the graph
+    if (split === 'graph-table' && a.type === 'scroll') return false;
     const w = useStore.getState().window;
     const xr = w.xMax - w.xMin;
     const yr = w.yMax - w.yMin;
     if (a.type === 'left' || a.type === 'right') {
       const d = a.type === 'left' ? -1 : 1;
       if (trace?.curveId) {
-        const x = trace.x + (d * xr) / 100;
+        const c = curves.find((k) => k.id === trace.curveId);
+        const step = traceStep(c, w);
+        const x = clampTrace(c, trace.x + d * step);
         setTrace({ curveId: trace.curveId, x });
-        if (x < w.xMin || x > w.xMax) setWindow({ ...w, xMin: w.xMin + (d * xr) / 100, xMax: w.xMax + (d * xr) / 100 });
+        if (c?.f && (x < w.xMin || x > w.xMax)) setWindow({ ...w, xMin: w.xMin + d * step, xMax: w.xMax + d * step });
       } else setWindow({ ...w, xMin: w.xMin + d * xr * 0.1, xMax: w.xMax + d * xr * 0.1 });
       return true;
     }
@@ -183,12 +207,12 @@ export function GraphView({ screen }: { screen: 'equations' | 'graph' }) {
       if (trace?.curveId && curves.length) {
         const i = curves.findIndex((c) => c.id === trace.curveId);
         const j = (i + a.dir + curves.length) % curves.length;
-        setTrace({ curveId: curves[j].id, x: trace.x });
+        setTrace({ curveId: curves[j].id, x: clampTrace(curves[j], trace.x) });
       } else setWindow({ ...w, yMin: w.yMin - a.dir * yr * 0.1, yMax: w.yMax - a.dir * yr * 0.1 });
       return true;
     }
-    if (a.type === 'enter' && !trace && curves[0]) {
-      setTrace({ curveId: curves[0].id, x: (w.xMin + w.xMax) / 2 });
+    if (a.type === 'enter' && split !== 'horiz' && !trace && curves[0]) {
+      setTrace({ curveId: curves[0].id, x: traceStart(curves[0], w) });
       return true;
     }
     return false;
@@ -274,10 +298,11 @@ export function GraphView({ screen }: { screen: 'equations' | 'graph' }) {
         break;
       case 'trace':
         setPane('graph');
-        if (curves[0]) setTrace({ curveId: curves[0].id, x: (w.xMin + w.xMax) / 2 });
+        if (curves[0]) setTrace({ curveId: curves[0].id, x: traceStart(curves[0], w) });
         break;
       case 'calc':
-        startTool('zero');
+        if (graphMode === 'func') startTool('zero');
+        else toast('CALC tools work in FUNCTION mode (MODE screen)');
         break;
       default:
         setPane('graph');
@@ -296,8 +321,13 @@ export function GraphView({ screen }: { screen: 'equations' | 'graph' }) {
   const shade = tool === 'integral' && analysis.out?.shade && fA?.f ? { f: fA.f, a: analysis.out.shade.a, b: analysis.out.shade.b, color: fA.fn.color } : null;
   const tangent = tool === 'tangent' && analysis.out?.tangent && fA ? { ...analysis.out.tangent, color: settings.theme === 'light' ? '#14182a' : '#e8ebf2' } : null;
 
-  const traceCurve = trace?.curveId ? parsed.find((p) => p.fn.id === trace.curveId) : null;
-  const traceY = trace ? (traceCurve?.f ? traceCurve.f(trace.x) : trace.y) : undefined;
+  const traceCurve = trace?.curveId && graphMode === 'func' ? parsed.find((p) => p.fn.id === trace.curveId) : null;
+  const tracePlot = trace?.curveId ? curves.find((c) => c.id === trace.curveId) : undefined;
+  const tracePt = trace ? (tracePlot ? curvePoint(tracePlot, trace.x) : { x: trace.x, y: trace.y ?? NaN }) : null;
+  const traceY = tracePt?.y;
+  const traceColor = tracePlot?.color;
+  const traceName = graphMode === 'func' ? (traceCurve ? `Y${traceCurve.index + 1}` : '') : tracePlot?.label ?? '';
+  const paramName = graphMode === 'par' ? 'T' : graphMode === 'pol' ? 'θ' : graphMode === 'seq' ? 'n' : null;
   const fmt = (n: number | undefined) => (n === undefined || !Number.isFinite(n) ? 'undefined' : formatNumber(n, { mode: 'float', digits: 8 }));
 
   const onWindowChange = useCallback((w: GraphWindow) => setWindow(w), [setWindow]);
@@ -306,19 +336,32 @@ export function GraphView({ screen }: { screen: 'equations' | 'graph' }) {
   }, []);
 
   return (
-    <div className="graph-layout" data-pane={pane}>
+    <div className="graph-layout" data-pane={pane} data-split={split}>
       {screen === 'equations' && (
       <aside className="graph-side" aria-label="Function editor">
         <div className="graph-side-scroll">
-          <FunctionList parsed={parsed} onTrace={(id) => useStore.getState().requestTrace(id, (graphWindow.xMin + graphWindow.xMax) / 2)} />
+          {graphMode === 'func' ? (
+            <FunctionList parsed={parsed} onTrace={(id) => useStore.getState().requestTrace(id, (graphWindow.xMin + graphWindow.xMax) / 2)} />
+          ) : (
+            <ModeFnList mode={graphMode} errors={compiledMode?.errors ?? {}} />
+          )}
           <div className="row wrap" style={{ marginTop: 12, gap: 6 }}>
-            <ExamplesButton />
+            {graphMode === 'func' && <ExamplesButton />}
             <button className="btn sm" onClick={() => setShowSave(true)} title="Save these functions and window">
               <IconSave width={15} height={15} /> Save graph
             </button>
           </div>
           <p className="muted small" style={{ marginTop: 14 }}>
-            Press <b>GRAPH</b> to see the graph, <b>TRACE</b> to trace it and <b>2nd TRACE</b> (CALC) for zeros, min/max, intersections, dy/dx and ∫.
+            {graphMode === 'func' ? (
+              <>
+                Press <b>GRAPH</b> to see the graph, <b>TRACE</b> to trace it and <b>2nd TRACE</b> (CALC) for zeros, min/max, intersections, dy/dx and ∫.
+              </>
+            ) : (
+              <>
+                {graphMode === 'par' ? 'PARAMETRIC' : graphMode === 'pol' ? 'POLAR' : 'SEQ'} mode (change it on the MODE screen). <b>X,T,θ,n</b> types{' '}
+                {graphMode === 'par' ? 'T' : graphMode === 'pol' ? 'θ' : 'n'}. Set the {graphMode === 'seq' ? 'n' : graphMode === 'par' ? 'T' : 'θ'} range with <b>WINDOW</b>.
+              </>
+            )}
           </p>
         </div>
         <SymbolBar />
@@ -340,6 +383,8 @@ export function GraphView({ screen }: { screen: 'equations' | 'graph' }) {
           showAxes={settings.showAxes}
           showLabels={settings.showLabels}
           lineWidth={settings.lineWidth}
+          graphStyle={settings.graphStyle}
+          drawOrder={settings.drawOrder}
           onSize={onSize}
           ariaLabel={`Graph of ${curves.map((c) => c.label).join(', ') || 'no functions'}`}
         />
@@ -362,13 +407,15 @@ export function GraphView({ screen }: { screen: 'equations' | 'graph' }) {
             title="Trace (Enter): move along a curve"
             aria-label="Trace"
             aria-pressed={!!trace}
-            onClick={() => (trace ? setTrace(null) : curves[0] && setTrace({ curveId: curves[0].id, x: (graphWindow.xMin + graphWindow.xMax) / 2 }))}
+            onClick={() => (trace ? setTrace(null) : curves[0] && setTrace({ curveId: curves[0].id, x: traceStart(curves[0], graphWindow) }))}
           >
             <IconCrosshair />
           </button>
-          <button className="icon-btn" title="Analyze: zeros, extrema, intersections, calculus" aria-label="Analyze" aria-pressed={!!tool} onClick={() => (tool ? setTool(null) : startTool('zero'))}>
-            <IconTarget />
-          </button>
+          {graphMode === 'func' && (
+            <button className="icon-btn" title="Analyze: zeros, extrema, intersections, calculus" aria-label="Analyze" aria-pressed={!!tool} onClick={() => (tool ? setTool(null) : startTool('zero'))}>
+              <IconTarget />
+            </button>
+          )}
         </div>
 
         {tool && (
@@ -395,22 +442,24 @@ export function GraphView({ screen }: { screen: 'equations' | 'graph' }) {
 
         {trace && !tool && (
           <div className="trace-readout" aria-live="polite">
-            {traceCurve ? (
+            {tracePlot ? (
               <>
-                <span className="swatch" style={{ background: traceCurve.fn.color }} />
-                <b>Y{traceCurve.index + 1}</b>
+                <span className="swatch" style={{ background: traceColor }} />
+                <b>{traceName}</b>
               </>
             ) : (
               <span className="muted">cursor</span>
             )}
-            <span>x = {fmt(trace.x)}</span>
+            {paramName && tracePlot && <span>{paramName} = {fmt(trace.x)}</span>}
+            {graphMode === 'pol' && tracePlot && <span>r = {fmt(compiledMode?.pointAt[tracePlot.id]?.(trace.x).extra)}</span>}
+            <span>x = {fmt(tracePt?.x)}</span>
             <span>y = {fmt(traceY)}</span>
-            {traceCurve && (
+            {tracePlot && (
               <span className="row" style={{ gap: 2 }}>
-                <button className="icon-btn sm" aria-label="Move left" onClick={() => setTrace({ ...trace, x: trace.x - (graphWindow.xMax - graphWindow.xMin) / 100 })}>
+                <button className="icon-btn sm" aria-label="Move left" onClick={() => setTrace({ ...trace, x: clampTrace(tracePlot, trace.x - traceStep(tracePlot, graphWindow)) })}>
                   <IconLeft />
                 </button>
-                <button className="icon-btn sm" aria-label="Move right" onClick={() => setTrace({ ...trace, x: trace.x + (graphWindow.xMax - graphWindow.xMin) / 100 })}>
+                <button className="icon-btn sm" aria-label="Move right" onClick={() => setTrace({ ...trace, x: clampTrace(tracePlot, trace.x + traceStep(tracePlot, graphWindow)) })}>
                   <IconRight />
                 </button>
               </span>
@@ -421,6 +470,12 @@ export function GraphView({ screen }: { screen: 'equations' | 'graph' }) {
           </div>
         )}
       </section>
+      )}
+
+      {split !== 'full' && (
+        <section className="split-pane" data-split={split} aria-label={split === 'horiz' ? 'Home screen' : 'Table'}>
+          {split === 'horiz' ? <CalculateView /> : <TableView />}
+        </section>
       )}
 
       {showWindow && <WindowDialog onClose={() => setShowWindow(false)} onPreset={applyPreset} />}
@@ -719,6 +774,7 @@ function WindowDialog({ onClose, onPreset }: { onClose: () => void; onPreset: (p
           <NumberField label="Y max" value={w.yMax} evaluate={ev} onCommit={(v) => set({ yMax: v })} validate={(v) => (v <= useStore.getState().window.yMin ? 'Must be > Y min' : null)} />
           <NumberField label="Y scale (0 = auto)" value={w.yScl} evaluate={ev} onCommit={(v) => set({ yScl: v })} validate={(v) => (v < 0 ? 'Must be ≥ 0' : null)} />
         </div>
+        {settings.graphMode !== 'func' && <ModeWindowFields />}
         <p className="muted small" style={{ margin: 0 }}>
           Fields accept expressions such as <code>-2π</code>. Scale sets grid/tick spacing; 0 chooses it automatically.
         </p>
@@ -819,5 +875,106 @@ function ExamplesButton() {
         </Dialog>
       )}
     </>
+  );
+}
+
+/* ------------------------------------------------------------------------ */
+/* Y= editor for PARAMETRIC / POLAR / SEQ modes                               */
+/* ------------------------------------------------------------------------ */
+
+function ModeFnList({ mode, errors }: { mode: ParamMode; errors: Record<string, string> }) {
+  const fns = useStore((s) => s.modeFns[mode]);
+  const update = useStore((s) => s.updateModeFn);
+  const add = useStore((s) => s.addModeFn);
+  const remove = useStore((s) => s.removeModeFn);
+  const title = mode === 'par' ? 'PARAMETRIC' : mode === 'pol' ? 'POLAR' : 'SEQUENCES';
+  return (
+    <div className="fn-list">
+      <div className="row">
+        <span className="label grow">{title}</span>
+      </div>
+      {fns.map((fn, i) => {
+        const [la, lb] = modeLabels(mode, i);
+        return (
+          <div key={fn.id} className={`fn-row${fn.visible ? '' : ' hidden-fn'}`}>
+            <button
+              className={`fn-swatch${fn.visible ? '' : ' off'}`}
+              style={{ background: fn.color, color: fn.visible ? '#fff' : fn.color }}
+              onClick={() => update(mode, fn.id, { visible: !fn.visible })}
+              aria-label={`${la} ${fn.visible ? 'visible — hide' : 'hidden — show'}`}
+              aria-pressed={fn.visible}
+            >
+              {fn.visible ? <IconEye width={15} height={15} /> : <IconEyeOff width={15} height={15} />}
+            </button>
+            <div className="fn-body">
+              <div className="fn-input-row">
+                <label className="fn-label" style={{ color: fn.color, minWidth: 44 }}>
+                  {mode === 'seq' ? `${la}(n)=` : `${la}=`}
+                </label>
+                <MathInput value={fn.a} onChange={(v) => update(mode, fn.id, { a: v })} ariaLabel={`${la} equals`} placeholder={mode === 'par' ? 'e.g. 3cos(T)' : mode === 'pol' ? 'e.g. 2sin(3θ)' : 'e.g. u(n-1)+2'} invalid={!!errors[fn.id]} />
+              </div>
+              {lb && (
+                <div className="fn-input-row">
+                  <label className="fn-label" style={{ color: fn.color, minWidth: 44 }}>
+                    {lb}=
+                  </label>
+                  <MathInput value={fn.b ?? ''} onChange={(v) => update(mode, fn.id, { b: v })} ariaLabel={`${lb} equals`} placeholder={mode === 'par' ? 'e.g. 2sin(T)' : 'start value, or {u(nMin), u(nMin+1)}'} />
+                </div>
+              )}
+              {errors[fn.id] && <div className="error-text">{errors[fn.id]}</div>}
+            </div>
+            <div className="fn-actions">
+              <button className="icon-btn sm" aria-label={`${mode === 'seq' ? 'Clear' : 'Delete'} ${la}`} title={mode === 'seq' ? 'Clear' : 'Delete'} onClick={() => remove(mode, fn.id)}>
+                <IconTrash />
+              </button>
+            </div>
+          </div>
+        );
+      })}
+      {mode !== 'seq' && (
+        <button className="btn" onClick={() => add(mode)} disabled={fns.length >= 6}>
+          <IconPlus width={16} height={16} /> Add {mode === 'par' ? 'parametric pair' : 'polar equation'}
+        </button>
+      )}
+      {mode === 'seq' && (
+        <p className="muted small" style={{ margin: 0 }}>
+          Use n for the term number and u(n−1), u(n−2) (or v, w) for earlier terms. Recursive sequences need a start value; for u(n−2) enter two, e.g. {'{1,1}'}.
+        </p>
+      )}
+    </div>
+  );
+}
+
+
+function ModeWindowFields() {
+  const w = useStore((s) => s.window);
+  const mode = useStore((s) => s.settings.graphMode);
+  const deg = useStore((s) => s.settings.angle === 'deg');
+  const setWindow = useStore((s) => s.setWindow);
+  const ev = useNumberEvaluator();
+  const W = modeWindow(w, deg);
+  const set = (p: Partial<GraphWindow>) => setWindow({ ...useStore.getState().window, ...p });
+  const positive = (v: number) => (v > 0 ? null : 'Must be > 0');
+  if (mode === 'par')
+    return (
+      <div className="form-grid" style={{ gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' }}>
+        <NumberField label="T min" value={W.tMin} evaluate={ev} onCommit={(v) => set({ tMin: v })} />
+        <NumberField label="T max" value={W.tMax} evaluate={ev} onCommit={(v) => set({ tMax: v })} />
+        <NumberField label="T step" value={W.tStep} evaluate={ev} onCommit={(v) => set({ tStep: v })} validate={positive} />
+      </div>
+    );
+  if (mode === 'pol')
+    return (
+      <div className="form-grid" style={{ gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' }}>
+        <NumberField label="θ min" value={W.thetaMin} evaluate={ev} onCommit={(v) => set({ thetaMin: v })} />
+        <NumberField label="θ max" value={W.thetaMax} evaluate={ev} onCommit={(v) => set({ thetaMax: v })} />
+        <NumberField label="θ step" value={W.thetaStep} evaluate={ev} onCommit={(v) => set({ thetaStep: v })} validate={positive} />
+      </div>
+    );
+  return (
+    <div className="form-grid" style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
+      <NumberField label="n min" value={W.nMin} evaluate={ev} onCommit={(v) => set({ nMin: Math.round(v) })} />
+      <NumberField label="n max" value={W.nMax} evaluate={ev} onCommit={(v) => set({ nMax: Math.round(v) })} validate={(v) => (v - W.nMin > 5000 ? 'At most 5000 terms' : null)} />
+    </div>
   );
 }

@@ -1,11 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { useKeypadHandler } from '../components/DeviceKeypad';
+import { StatusBar } from './ModeView';
 import type { KeyAction, KeyFace } from '../components/keypad';
 import { MathInput, type MathInputHandle } from '../components/MathInput';
 import { Tex } from '../components/Tex';
 import { copyText } from '../components/ui';
 import { IconCopy, IconTrash } from '../components/Icons';
-import { calculate } from '../math/engine';
+import { calculate, toFailure } from '../math/engine';
+import { evaluateComplex, formatComplex, usesI, type Complex } from '../math/complex';
+import { parse } from '../math/parser';
+import { toTex } from '../math/latex';
+import type { Node } from '../math/ast';
 import type { EvalContext } from '../math/evaluate';
 import { runProgram, ProgramError, type ProgramIO } from '../math/program';
 import { formatValue } from '../math/format';
@@ -13,12 +18,40 @@ import { useEvalContext } from '../state/context';
 import { nextTime, uid, useStore, type HistoryEntry, type ListName } from '../state/store';
 
 /** Entries currently on the calculator screen (ClrHome / CLEAR hide older ones). */
+/** Complex values held by Ans and stored variables (kept for this session). */
+const complexVars: Record<string, Complex> = {};
+
+function refsComplexVar(n: Node): boolean {
+  switch (n.type) {
+    case 'var':
+      return n.name in complexVars;
+    case 'binary':
+      return refsComplexVar(n.left) || refsComplexVar(n.right);
+    case 'unary':
+    case 'postfix':
+      return refsComplexVar(n.arg);
+    case 'call':
+      return n.args.some(refsComplexVar);
+    case 'list':
+      return n.items.some(refsComplexVar);
+    case 'store':
+      return refsComplexVar(n.value);
+    default:
+      return false;
+  }
+}
+
 const visibleHistory = () => {
   const st = useStore.getState();
   return st.history.filter((h) => h.time >= st.screenFrom);
 };
 
 const OPERATOR_KEYS = new Set(['+', '*', '/', '^']);
+
+/** MATHPRINT shows typeset math; CLASSIC shows the plain one-line text, like the TI-84. */
+function Show({ tex, text, classic }: { tex: string; text: string; classic: boolean }) {
+  return classic ? <span className="classic-text">{text}</span> : <Tex tex={tex} label={text} />;
+}
 
 export function CalculateView() {
   const input = useStore((s) => s.input);
@@ -33,6 +66,7 @@ export function CalculateView() {
   const setVar = useStore((s) => s.setVar);
   const fmt = useStore((s) => s.settings.format);
   const keypadOnly = useStore((s) => s.settings.keypadOnly);
+  const classic = useStore((s) => s.settings.display === 'classic');
   const hasAns = useStore((s) => !!s.vars.Ans);
   const ctx = useEvalContext();
 
@@ -84,11 +118,52 @@ export function CalculateView() {
 
   const evaluateInput = useCallback(
     (src: string) => {
-      const res = calculate(src, ctx);
-      if (!res.ok) {
-        setError({ kind: res.kind, message: res.error, pos: res.pos });
+      // Complex numbers: expressions with i, earlier complex answers, or NONREAL results in a+bi / re^θi mode
+      let ast: Node | null = null;
+      try {
+        ast = parse(src);
+      } catch {
+        ast = null;
+      }
+      const complexMode = useStore.getState().settings.complex;
+      const wantsComplex = ast && (usesI(ast) || refsComplexVar(ast));
+      const res = wantsComplex ? null : calculate(src, ctx);
+      if (!res || !res.ok) {
+        if (ast && (wantsComplex || (res && res.kind === 'NONREAL' && complexMode !== 'real'))) {
+          try {
+            const z = evaluateComplex(ast, ctx, complexVars);
+            const out = formatComplex(z, complexMode === 'polar' ? 'polar' : 'rect', fmt);
+            addHistory({ id: uid(), input: src, inputTex: toTex(ast), resultTex: out.tex, resultText: out.text, exact: false, time: nextTime() });
+            const target = ast.type === 'store' ? ast.target : null;
+            if (z.im === 0) {
+              delete complexVars.Ans;
+              setVar('Ans', { kind: 'scalar', n: z.re, r: null });
+              if (target) {
+                delete complexVars[target];
+                setVar(target, { kind: 'scalar', n: z.re, r: null });
+              }
+            } else {
+              complexVars.Ans = z;
+              if (target) complexVars[target] = z;
+            }
+            record(src, '');
+            setInput('');
+            setError(null);
+            setSel(null);
+          } catch (e) {
+            const f = toFailure(e);
+            setError({ kind: f.kind, message: f.error, pos: f.pos });
+          }
+          return;
+        }
+        if (res && !res.ok) {
+          const hint = res.kind === 'NONREAL' && complexMode === 'real' ? ' (choose a+bi on the MODE screen for complex answers)' : '';
+          setError({ kind: res.kind, message: res.error + hint, pos: res.pos });
+        }
         return;
       }
+      if (res.value.kind === 'scalar') delete complexVars.Ans;
+      if (res.storedTo) delete complexVars[res.storedTo];
       const f = formatValue(res.value, fmt);
       const entry: HistoryEntry = {
         id: uid(),
@@ -387,6 +462,7 @@ export function CalculateView() {
   return (
     <div className="calc-layout">
       <section className="calc-display" aria-label="Calculator screen" onClick={() => !isTouch && inputRef.current?.focus()}>
+        <StatusBar />
         <div className="history-scroll" ref={scrollRef} role="log" aria-label="Calculator screen">
           {history.map((h, i) =>
             h.kind === 'text' ? (
@@ -396,13 +472,13 @@ export function CalculateView() {
             ) : h.kind === 'value' ? (
               <div key={h.id} className="hist-line value">
                 <button className={`hist-result${sel === i * 2 + 1 ? ' selected' : ''}`} data-row={i * 2 + 1} onClick={() => h.resultText && insertText(h.resultText)}>
-                  <Tex tex={h.resultTex ?? ''} label={h.resultText} />
+                  <Show tex={h.resultTex ?? ''} text={h.resultText ?? ''} classic={classic} />
                 </button>
               </div>
             ) : (
               <div key={h.id} className="hist-entry">
                 <button className={`hist-input${sel === i * 2 ? ' selected' : ''}`} data-row={i * 2} title="Reuse this expression" onClick={() => insertText(h.input)}>
-                  <Tex tex={h.inputTex} label={h.input} />
+                  <Show tex={h.inputTex} text={h.input} classic={classic} />
                 </button>
                 {h.resultTex !== undefined && (
                   <div className="hist-result-row">
@@ -415,11 +491,11 @@ export function CalculateView() {
                       </button>
                     </div>
                     <button className={`hist-result${sel === i * 2 + 1 ? ' selected' : ''}`} data-row={i * 2 + 1} title="Insert this result" onClick={() => insertText(h.resultText ?? '')}>
-                      <Tex tex={h.resultTex ?? ''} label={h.resultText} />
+                      <Show tex={h.resultTex ?? ''} text={h.resultText ?? ''} classic={classic} />
                     </button>
                   </div>
                 )}
-                {h.approxTex && (
+                {h.approxTex && !classic && (
                   <div className="hist-approx" title="The answer above is exact; this is its decimal value">
                     <Tex tex={`\\approx ${h.approxTex}`} />
                   </div>
