@@ -1,4 +1,4 @@
-import { MathError, type Node } from './ast';
+import { MathError, type Node, type RelOp } from './ast';
 import { FN_ALIASES, FN_MAP } from './functions';
 
 /* ------------------------------------------------------------------------ */
@@ -18,6 +18,8 @@ type TokType =
   | 'rbrace'
   | 'comma'
   | 'store'
+  | 'rel' // = ≠ < > ≤ ≥
+  | 'logic' // and or xor
   | 'eof';
 
 export interface Token {
@@ -36,6 +38,7 @@ const WORDS: Array<[string, TokType, string]> = (() => {
   for (const name of Object.keys(FN_MAP)) if (name !== 'npr' && name !== 'ncr') list.push([name, 'func', name]);
   for (const [alias, target] of Object.entries(FN_ALIASES)) list.push([alias, 'func', target]);
   list.push(['npr', 'combo', 'nPr'], ['ncr', 'combo', 'nCr']);
+  list.push(['and', 'logic', 'and'], ['xor', 'logic', 'xor'], ['or', 'logic', 'or']);
   list.push(['pi', 'ident', 'pi'], ['ans', 'ident', 'Ans'], ['theta', 'ident', 'θ']);
   // Function npr/ncr are also callable as functions: handled in parser when followed by "("
   return list.sort((a, b) => b[0].length - a[0].length);
@@ -147,7 +150,33 @@ export function tokenize(src: string): Token[] {
         push('comma', ',', pos);
         break;
       case '!':
-        push('post', '!', pos);
+        if (src[i] === '=') {
+          i++;
+          push('rel', '≠', pos);
+        } else push('post', '!', pos);
+        break;
+      case '=':
+        push('rel', '=', pos);
+        break;
+      case '≠':
+      case '≤':
+      case '≥':
+        push('rel', c, pos);
+        break;
+      case '<':
+        if (src[i] === '=') {
+          i++;
+          push('rel', '≤', pos);
+        } else if (src[i] === '>') {
+          i++;
+          push('rel', '≠', pos);
+        } else push('rel', '<', pos);
+        break;
+      case '>':
+        if (src[i] === '=') {
+          i++;
+          push('rel', '≥', pos);
+        } else push('rel', '>', pos);
         break;
       case '°':
         push('post', '°', pos);
@@ -210,7 +239,8 @@ function splitIdentifier(
       advanceExtra(2);
       return;
     }
-    const match = WORDS.find(([w]) => rest.startsWith(w));
+    // and/or/xor only match when typed in lower case, so ALPHA letters like O,R stay variables
+    const match = WORDS.find(([w, type]) => rest.startsWith(w) && (type !== 'logic' || word.startsWith(w, j)));
     if (match) {
       // nPr/nCr followed by "(" act as functions
       if (match[1] === 'combo' && j + match[0].length === word.length && src[end] === '(') {
@@ -268,12 +298,12 @@ class Parser {
 
   parseTop(): Node {
     if (this.peek().type === 'eof') throw new MathError('SYNTAX', 'Expression is empty', 0);
-    let node = this.parseExpr();
+    let node = this.parseFull();
     if (this.peek().type === 'store') {
       const st = this.next();
       const t = this.next();
-      if (t.type !== 'ident' || !/^[A-Zθ]$/.test(t.value)) {
-        throw new MathError('SYNTAX', 'Store (→) needs a single-letter variable A–Z or θ', st.pos);
+      if (t.type !== 'ident' || !/^([A-Zθ]|x|L[1-6])$/.test(t.value)) {
+        throw new MathError('SYNTAX', 'Store (→) needs a variable A–Z, θ, x or a list L1–L6', st.pos);
       }
       node = { type: 'store', value: node, target: t.value };
     }
@@ -283,6 +313,35 @@ class Parser {
       throw new MathError('SYNTAX', `Unexpected "${t.value}"`, t.pos);
     }
     return node;
+  }
+
+  /** Lowest precedence: or / xor, then and, then relations (TI-84 order). */
+  private parseFull(): Node {
+    let left = this.parseAnd();
+    while (this.peek().type === 'logic' && this.peek().value !== 'and') {
+      const op = this.next().value as 'or' | 'xor';
+      left = { type: 'binary', op, left, right: this.parseAnd() };
+    }
+    return left;
+  }
+
+  private parseAnd(): Node {
+    let left = this.parseRel();
+    while (this.peek().type === 'logic' && this.peek().value === 'and') {
+      this.next();
+      left = { type: 'binary', op: 'and', left, right: this.parseRel() };
+    }
+    return left;
+  }
+
+  private parseRel(): Node {
+    let left = this.parseExpr();
+    while (this.peek().type === 'rel') {
+      const t = this.next();
+      if (this.peek().type === 'eof') throw new MathError('SYNTAX', `Missing a value after "${t.value}"`, t.pos);
+      left = { type: 'binary', op: t.value as RelOp, left, right: this.parseExpr() };
+    }
+    return left;
   }
 
   private parseExpr(): Node {
@@ -392,7 +451,7 @@ class Parser {
           // Y1(…) evaluates the function; bare Y1 means Y1(x)
           if (this.peek().type === 'lparen') {
             const open = this.next();
-            const arg = this.parseExpr();
+            const arg = this.parseFull();
             this.closeParen(open.pos);
             return { type: 'call', name: t.value, args: [arg] };
           }
@@ -402,17 +461,17 @@ class Parser {
       }
       case 'lparen': {
         if (this.peek().type === 'rparen') throw new MathError('SYNTAX', 'Empty parentheses', t.pos);
-        const e = this.parseExpr();
+        const e = this.parseFull();
         this.closeParen(t.pos);
         return e;
       }
       case 'lbrace': {
         const items: Node[] = [];
         if (this.peek().type !== 'rbrace') {
-          items.push(this.parseExpr());
+          items.push(this.parseFull());
           while (this.peek().type === 'comma') {
             this.next();
-            items.push(this.parseExpr());
+            items.push(this.parseFull());
           }
         }
         const c = this.peek();
@@ -433,10 +492,10 @@ class Parser {
         const open = this.next();
         const args: Node[] = [];
         if (this.peek().type !== 'rparen' && this.peek().type !== 'eof') {
-          args.push(this.parseExpr());
+          args.push(this.parseFull());
           while (this.peek().type === 'comma') {
             this.next();
-            args.push(this.parseExpr());
+            args.push(this.parseFull());
           }
         }
         this.closeParen(open.pos);
@@ -457,7 +516,9 @@ class Parser {
       case 'post':
         throw new MathError('SYNTAX', `"${t.value}" must follow a value`, t.pos);
       case 'combo':
-        throw new MathError('SYNTAX', `${t.value} needs a value on its left`, t.pos);
+      case 'rel':
+      case 'logic':
+        throw new MathError('SYNTAX', `"${t.value}" needs a value on its left`, t.pos);
       default:
         throw new MathError('SYNTAX', `Unexpected "${t.value}"`, t.pos);
     }

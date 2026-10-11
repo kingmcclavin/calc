@@ -156,9 +156,11 @@ button {
    App shell
    ========================================================================== */
 .app {
+  /* Fixed to the viewport so mobile browsers never scroll or offset the whole page */
+  position: fixed;
+  inset: 0;
   display: grid;
   grid-template-columns: var(--nav-w) 1fr;
-  height: 100dvh;
   overflow: hidden;
 }
 .sidebar {
@@ -224,7 +226,7 @@ button {
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  height: 100dvh;
+  height: 100%;
 }
 .topbar {
   display: flex;
@@ -273,11 +275,17 @@ button {
     display: none;
   }
   .main {
-    height: calc(100dvh - var(--bottom-nav-h) - var(--safe-b));
+    height: calc(100% - var(--bottom-nav-h) - var(--safe-b));
+  }
+  .app.on-calc .main {
+    height: 100%;
+  }
+  .bottom-nav.hidden-on-calc {
+    display: none !important;
   }
   .bottom-nav {
     display: grid;
-    grid-template-columns: repeat(5, 1fr);
+    grid-template-columns: repeat(6, 1fr);
     position: fixed;
     left: 0;
     right: 0;

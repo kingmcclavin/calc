@@ -1,12 +1,13 @@
 import { useEffect, type ComponentType, type SVGProps } from 'react';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { IconCalc, IconGraph, IconHistory, IconMoon, IconSettings, IconSolver, IconStats, IconSun, IconTable } from './components/Icons';
+import { IconCalc, IconGraph, IconHistory, IconMoon, IconSettings, IconProgram, IconSolver, IconStats, IconSun, IconTable } from './components/Icons';
 import { ToastHost } from './components/ui';
 import { useStore, type ViewId } from './state/store';
 import { CalculateView } from './views/CalculateView';
 import { GraphView } from './views/GraphView';
 import { HistoryView } from './views/HistoryView';
 import { SettingsView } from './views/SettingsView';
+import { ProgramsView } from './views/ProgramsView';
 import { SolverView } from './views/SolverView';
 import { StatsView } from './views/StatsView';
 import { TableView } from './views/TableView';
@@ -25,8 +26,9 @@ const NAV: NavItem[] = [
   { id: 'table', label: 'Table', title: 'Function table', icon: IconTable, shortcut: '3' },
   { id: 'stats', label: 'Stats', title: 'Statistics', icon: IconStats, shortcut: '4' },
   { id: 'solver', label: 'Solver', title: 'Equation solver', icon: IconSolver, shortcut: '5' },
-  { id: 'history', label: 'History', title: 'History & saved graphs', icon: IconHistory, shortcut: '6' },
-  { id: 'settings', label: 'Settings', title: 'Settings', icon: IconSettings, shortcut: '7' },
+  { id: 'programs', label: 'Programs', title: 'Write and run programs', icon: IconProgram, shortcut: '6' },
+  { id: 'history', label: 'History', title: 'History & saved graphs', icon: IconHistory, shortcut: '7' },
+  { id: 'settings', label: 'Settings', title: 'Settings', icon: IconSettings, shortcut: '8' },
 ];
 
 const SUBTITLES: Record<ViewId, string> = {
@@ -35,6 +37,7 @@ const SUBTITLES: Record<ViewId, string> = {
   table: 'Function values',
   stats: 'Lists, statistics & regression',
   solver: 'Equations & systems',
+  programs: 'TI-BASIC-style programs',
   history: 'History & saved graphs',
   settings: 'Preferences',
 };
@@ -62,7 +65,7 @@ export function App() {
   const updateSettings = useStore((s) => s.updateSettings);
   useThemeEffect();
 
-  // Alt+1…7 switches sections
+  // Alt+1…8 switches sections
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!e.altKey || e.ctrlKey || e.metaKey) return;
@@ -93,14 +96,14 @@ export function App() {
   );
 
   return (
-    <div className="app">
+    <div className={`app${view === 'calc' ? ' on-calc' : ''}`}>
       <nav className="sidebar" aria-label="Sections">
         <div className="brand" title="Lumen Graphing Calculator">
           <div className="brand-mark">L</div>
         </div>
-        {NAV.slice(0, 5).map(navButton)}
+        {NAV.slice(0, 6).map(navButton)}
         <div className="spacer" />
-        {NAV.slice(5).map(navButton)}
+        {NAV.slice(6).map(navButton)}
       </nav>
 
       <div className={`main${view === 'calc' ? ' calc-mode' : ''}`}>
@@ -143,12 +146,14 @@ export function App() {
             {view === 'solver' && <SolverView />}
             {view === 'history' && <HistoryView />}
             {view === 'settings' && <SettingsView />}
+            {view === 'programs' && <ProgramsView />}
           </ErrorBoundary>
         </main>
       </div>
 
-      <nav className="bottom-nav" aria-label="Sections">
-        {NAV.slice(0, 5).map(navButton)}
+      {/* On phones the calculator itself is full-screen; its keys (Y=, GRAPH, STAT, PRGM, APPS…) navigate */}
+      <nav className={`bottom-nav${view === 'calc' ? ' hidden-on-calc' : ''}`} aria-label="Sections">
+        {NAV.slice(0, 6).map(navButton)}
       </nav>
       <ToastHost />
     </div>

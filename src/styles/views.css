@@ -74,7 +74,7 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 18px 4px 10px;
+  padding: 6px 4px 10px;
   overscroll-behavior: contain;
   scrollbar-width: thin;
 }
@@ -191,240 +191,232 @@
   letter-spacing: 0.04em;
 }
 
-/* Mode indicators in the screen's top-right corner */
+/* Keypad */
+.calc-keys {
+  flex: 0 0 auto;
+  height: clamp(340px, 64%, 640px);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+}
 .keypad-status {
-  position: absolute;
-  top: 12px;
-  right: 22px;
-  padding: 2px 4px;
-  border-radius: 4px;
-  background: var(--dev-screen);
+  order: -1;
   display: flex;
   gap: 6px;
-  pointer-events: none;
-  z-index: 1;
+  justify-content: flex-end;
+  min-height: 18px;
+  padding: 0 4px;
 }
 .ind {
   font-size: 10px;
   font-weight: 750;
   letter-spacing: 0.08em;
-  color: var(--dev-text);
-  opacity: 0.45;
+  color: var(--text-3);
   font-family: var(--font-mono);
 }
 .ind-2nd {
-  color: var(--dev-lbl-2nd);
-  opacity: 1;
+  color: var(--second);
 }
 .ind-alpha {
-  color: var(--dev-lbl-alpha);
-  opacity: 1;
-}
-
-/* Keypad */
-.calc-keys {
-  flex: 0 0 auto;
-  height: clamp(360px, 68%, 680px);
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
+  color: var(--success);
 }
 .keypad.ti {
   flex: 1;
   min-height: 0;
   display: grid;
-  /* 20 tracks: ordinary keys span 4, undo/redo span 3, the arrow pad 5 */
-  grid-template-columns: repeat(20, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   grid-template-rows: repeat(10, minmax(0, 1fr));
-  column-gap: 8px;
-  row-gap: 2px;
-}
-.kcell {
-  grid-column: span 4;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  min-width: 0;
-}
-.kcell-undo {
-  grid-column: span 3;
-}
-.klabels {
-  flex: 0 0 auto;
-  height: 15px;
-  display: flex;
-  justify-content: center;
-  align-items: flex-end;
-  gap: 7px;
-  font-size: 11.5px;
-  font-weight: 500;
-  line-height: 1;
-  white-space: nowrap;
-  overflow: hidden;
-  letter-spacing: 0.02em;
-}
-.lbl-2nd {
-  color: var(--dev-lbl-2nd);
-}
-.lbl-alpha {
-  color: var(--dev-lbl-alpha);
+  gap: 6px 7px;
 }
 .key {
-  flex: 1 1 auto;
-  min-height: 0;
-  min-width: 0;
-  margin-top: 3px;
+  position: relative;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  border: 1.5px solid var(--dev-outline);
-  border-radius: 999px;
-  background: transparent;
-  color: var(--dev-key-text);
-  font-family: var(--font-sans);
-  font-size: 15px;
-  font-weight: 450;
-  letter-spacing: 0.02em;
+  min-height: 0;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--key-fn);
+  box-shadow: var(--key-shadow);
+  color: var(--text);
+  font-weight: 600;
+  font-size: 14px;
   user-select: none;
   -webkit-user-select: none;
   touch-action: manipulation;
-  transition: filter 0.1s, transform 0.06s, background 0.1s;
-  padding: 0 4px;
+  transition: background 0.12s, transform 0.06s, border-color 0.12s;
+  padding: 0 2px;
   overflow: hidden;
   white-space: nowrap;
 }
 .key:hover {
-  background: color-mix(in srgb, var(--dev-outline) 12%, transparent);
+  background: var(--key-fn-hover);
 }
 .key:active {
   transform: scale(0.95);
-  filter: brightness(0.85);
+}
+.key-num {
+  background: var(--key-num);
+  font-size: 18px;
+  font-weight: 540;
+}
+.key-num:hover {
+  background: var(--key-num-hover);
+}
+.key-op {
+  background: var(--key-op);
+  color: var(--accent);
+  font-size: 20px;
+}
+.key-op:hover {
+  background: var(--key-op-hover);
+}
+.key-mod,
+.key-clear,
+.key-top {
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--text-2);
+}
+.key-clear {
+  color: var(--danger);
+}
+.key-top {
+  border-radius: 999px;
+  font-size: 11px;
+  background: var(--surface-3);
+}
+.key-shift {
+  background: var(--second-soft);
+  color: var(--second);
+  font-size: 13px;
+  font-weight: 750;
+  border-color: transparent;
+}
+.key.key-shift[aria-pressed='true'] {
+  background: var(--second);
+  color: #1a1204;
+}
+.key-alpha {
+  background: var(--success-soft);
+  color: var(--success);
+  font-size: 11.5px;
+  font-weight: 750;
+  border-color: transparent;
+}
+.key.key-alpha[aria-pressed='true'] {
+  background: var(--success);
+  color: #04140c;
+}
+.key-enter {
+  background: var(--accent);
+  color: var(--accent-text);
+  border-color: transparent;
+  font-size: 12.5px;
+  font-weight: 750;
+  letter-spacing: 0.05em;
+}
+.key-enter:hover {
+  background: var(--accent-strong);
+}
+.key-labels {
+  position: absolute;
+  top: 2px;
+  left: 5px;
+  right: 5px;
+  display: flex;
+  justify-content: space-between;
+  gap: 2px;
+  font-size: 9px;
+  font-weight: 650;
+  line-height: 1.1;
+  pointer-events: none;
+}
+.lbl-2nd {
+  color: var(--second);
+  overflow: hidden;
+  text-overflow: clip;
+}
+.lbl-alpha {
+  color: var(--success);
+}
+.key-enter .lbl-2nd {
+  color: color-mix(in srgb, var(--accent-text) 80%, transparent);
 }
 .key .key-main {
   line-height: 1;
 }
-.key-num {
-  background: var(--dev-num-bg);
-  border-color: var(--dev-num-bg);
-  color: var(--dev-num-text);
-  font-size: 22px;
-  font-weight: 400;
+.key:has(.key-labels) .key-main {
+  margin-top: 8px;
 }
-.key-op,
-.key-top,
-.key-enter {
-  background: var(--dev-op-bg);
-  border-color: var(--dev-op-bg);
-  color: var(--dev-op-text);
-}
-.key-num:hover,
-.key-op:hover,
-.key-top:hover,
-.key-enter:hover {
-  filter: brightness(0.93);
-  background-color: inherit;
-}
-.key-num:hover {
-  background: var(--dev-num-bg);
-}
-.key-op:hover,
-.key-top:hover,
-.key-enter:hover {
-  background: var(--dev-op-bg);
-}
-.key-op {
-  font-size: 21px;
-}
-.key-shift {
-  background: var(--dev-2nd-bg);
-  border-color: var(--dev-2nd-bg);
-  color: #0b1520;
-}
-.key-alpha {
-  background: var(--dev-alpha-bg);
-  border-color: var(--dev-alpha-bg);
-  color: #0d1a03;
-}
-:root[data-theme='light'] .key-shift,
-:root[data-theme='light'] .key-alpha {
-  color: #fff;
-}
-.key-shift:hover {
-  background: var(--dev-2nd-bg);
-  filter: brightness(1.08);
-}
-.key-alpha:hover {
-  background: var(--dev-alpha-bg);
-  filter: brightness(1.08);
-}
-.key.key-shift[aria-pressed='true'],
-.key.key-alpha[aria-pressed='true'] {
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--dev-text) 70%, transparent);
-}
-.key-undo {
-  font-size: 20px;
-  border-radius: 16px;
-}
-.second-on .key.showing-second {
-  border-color: var(--dev-lbl-2nd);
-  color: var(--dev-lbl-2nd);
-  background: transparent;
+.second-on .key.showing-second,
+.alpha-on .key.showing-alpha {
+  border-color: color-mix(in srgb, var(--second) 60%, transparent);
+  color: var(--second);
 }
 .alpha-on .key.showing-alpha {
-  border-color: var(--dev-lbl-alpha);
-  color: var(--dev-lbl-alpha);
-  background: transparent;
+  border-color: color-mix(in srgb, var(--success) 60%, transparent);
+  color: var(--success);
 }
-.second-on .kcell:has(.showing-second) .klabels,
-.alpha-on .kcell:has(.showing-alpha) .klabels {
+.second-on .key.showing-second .key-labels,
+.alpha-on .key.showing-alpha .key-labels {
   visibility: hidden;
 }
+.second-on .key.showing-second .key-main,
+.alpha-on .key.showing-alpha .key-main {
+  margin-top: 0;
+  font-size: 14px;
+}
 
-/* Arrow pad: four round buttons in a diamond */
+/* Arrow pad: right two columns of rows 2–3 */
 .dpad {
-  grid-column: 16 / span 5;
+  grid-column: 4 / span 2;
   grid-row: 2 / span 2;
-  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1.1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  grid-template-areas: 'left up right' 'left down right';
+  gap: 4px;
+  padding: 3px;
+  border-radius: 18px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
   min-height: 0;
-  align-self: center;
-  justify-self: center;
-  width: 100%;
-  height: 100%;
-  max-width: 150px;
-  container-type: size;
 }
 .dpad-btn {
-  position: absolute;
-  width: min(34cqw, 40cqh);
-  height: min(34cqw, 40cqh);
-  border-radius: 50%;
-  border: 0;
-  background: var(--dev-num-bg);
-  color: var(--dev-num-text);
+  border: 1px solid var(--border);
+  background: var(--key-fn);
+  box-shadow: var(--key-shadow);
+  color: var(--text-2);
   font-size: 13px;
-  display: grid;
-  place-items: center;
+  border-radius: 10px;
+  min-height: 0;
   touch-action: manipulation;
-  transform: translate(-50%, -50%);
+}
+.dpad-btn:hover {
+  background: var(--key-fn-hover);
+  color: var(--text);
 }
 .dpad-btn:active {
-  filter: brightness(0.85);
+  transform: scale(0.94);
 }
 .dpad-up {
-  left: 50%;
-  top: 22%;
+  grid-area: up;
 }
 .dpad-down {
-  left: 50%;
-  top: 78%;
+  grid-area: down;
 }
 .dpad-left {
-  left: 20%;
-  top: 50%;
+  grid-area: left;
+  border-radius: 14px 8px 8px 14px;
 }
 .dpad-right {
-  left: 80%;
-  top: 50%;
+  grid-area: right;
+  border-radius: 8px 14px 14px 8px;
 }
 
 @media (max-width: 899px) {
@@ -434,53 +426,45 @@
   }
   .calc-layout {
     padding: calc(8px + var(--safe-t)) 8px 8px;
-    gap: 8px;
+    gap: 6px;
   }
   .calc-display {
     min-height: 110px;
   }
   .calc-keys {
-    height: clamp(320px, 74%, 620px);
+    height: clamp(300px, 72%, 580px);
+    gap: 4px;
   }
   .keypad.ti {
-    column-gap: 7px;
+    gap: 5px;
   }
   .key {
-    font-size: 13.5px;
+    border-radius: 9px;
   }
-  .key-num {
-    font-size: 20px;
-  }
-  .klabels {
-    font-size: 10.5px;
-    height: 13px;
-  }
-}
-@media (max-height: 700px) {
-  .klabels {
-    font-size: 9.5px;
-    height: 11px;
-  }
-  .key {
-    margin-top: 2px;
-    font-size: 12.5px;
-  }
-  .key-num {
-    font-size: 17px;
-  }
-  .calc-display .katex {
-    font-size: 1.3em;
+  .entry {
+    padding: 6px 10px 10px;
   }
   .entry-input {
-    font-size: 1.5rem;
+    height: 42px;
+    font-size: 17px;
+  }
+  .hist-result {
+    font-size: 1.12em;
   }
 }
-@media (min-width: 900px) {
-  .calc-layout {
-    max-width: 600px;
+@media (max-height: 720px) {
+  .key-labels {
+    font-size: 8px;
+    top: 1px;
   }
-  .calc-keys {
-    height: clamp(380px, 66%, 640px);
+  .key:has(.key-labels) .key-main {
+    margin-top: 6px;
+  }
+  .key-num {
+    font-size: 16px;
+  }
+  .entry-preview {
+    min-height: 24px;
   }
 }
 
@@ -1062,4 +1046,165 @@
 .mini-graph .graph-canvas-wrap {
   position: absolute;
   inset: 0;
+}
+
+.second-on .key-enter.showing-second {
+  color: var(--accent-text);
+}
+@media (min-width: 900px) {
+  .calc-layout {
+    max-width: 600px;
+  }
+  .calc-keys {
+    height: clamp(360px, 60%, 600px);
+  }
+}
+
+/* Phones: the calculator fills the screen (no bottom bar), so respect the home-indicator area */
+@media (max-width: 899px) {
+  .calc-layout {
+    padding-bottom: calc(8px + var(--safe-b));
+  }
+  .calc-keys {
+    height: clamp(330px, 70%, 600px);
+  }
+}
+.ind-run {
+  color: var(--success);
+}
+
+/* Program output on the calculator screen */
+.hist-line {
+  padding: 2px 16px;
+  font-family: KaTeX_Main, 'Times New Roman', serif;
+  font-size: 1.35rem;
+  color: var(--dev-text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.hist-line.err {
+  color: var(--danger);
+  font-family: var(--font-sans);
+  font-size: 14px;
+}
+.hist-line.value {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 10px;
+}
+.run-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 6px 12px 0;
+  padding: 4px 4px 4px 10px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--success) 14%, transparent);
+  color: var(--success);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.entry.prompting {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+}
+.entry.prompting .entry-input {
+  flex: 1;
+  width: auto;
+  min-width: 80px;
+}
+.entry-prompt {
+  font-family: KaTeX_Main, 'Times New Roman', serif;
+  font-size: 1.85rem;
+  color: var(--dev-text);
+  padding-left: 6px;
+  white-space: pre;
+}
+@media (max-height: 700px) {
+  .entry-prompt {
+    font-size: 1.5rem;
+  }
+}
+
+/* Programs */
+.programs-layout {
+  display: grid;
+  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.cmd-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.cmd-bar button {
+  height: 30px;
+  padding: 0 9px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--key-fn);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  touch-action: manipulation;
+}
+.cmd-bar button:hover {
+  background: var(--key-fn-hover);
+}
+.code-editor {
+  display: flex;
+  height: min(52dvh, 460px);
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  background: var(--dev-screen);
+  overflow: hidden;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  line-height: 22px;
+}
+.code-gutter {
+  flex: 0 0 auto;
+  min-width: 40px;
+  padding: 10px 8px;
+  text-align: right;
+  color: var(--text-3);
+  background: var(--surface-2);
+  border-right: 1px solid var(--border);
+  overflow: hidden;
+  user-select: none;
+}
+.code-gutter .bad {
+  color: var(--danger);
+  font-weight: 700;
+}
+.code-area {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 0;
+  outline: none;
+  resize: none;
+  background: transparent;
+  color: var(--dev-text);
+  font: inherit;
+  line-height: inherit;
+  white-space: pre;
+  overflow: auto;
+  caret-color: var(--accent);
+}
+@media (max-width: 899px) {
+  .programs-layout {
+    grid-template-columns: 1fr;
+  }
+  .programs-page.editing .programs-list {
+    display: none;
+  }
+  .programs-page:not(.editing) .programs-help {
+    display: none;
+  }
+}
+.hist-line.value .katex {
+  font-size: 1.3em;
 }

@@ -2,8 +2,9 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import type { AngleMode, Scalar } from '../math/evaluate';
 import type { FormatOptions } from '../math/format';
+import { EXAMPLE_PROGRAMS } from '../math/program';
 
-export type ViewId = 'calc' | 'graph' | 'table' | 'stats' | 'solver' | 'history' | 'settings';
+export type ViewId = 'calc' | 'graph' | 'table' | 'stats' | 'solver' | 'programs' | 'history' | 'settings';
 export type ThemePref = 'dark' | 'light' | 'system';
 /** What a TI-style key (Y=, WINDOW, ZOOM, TRACE, CALC, STAT PLOT) asks the target view to open. */
 export type GraphIntent = 'equations' | 'window' | 'zoom' | 'trace' | 'calc' | 'graph' | 'plot';
@@ -22,6 +23,9 @@ export interface Settings {
 
 export interface HistoryEntry {
   id: string;
+  /** Program output lines: 'text' (left aligned) or 'value' (right aligned) */
+  kind?: 'text' | 'value';
+  text?: string;
   input: string;
   inputTex: string;
   resultTex?: string;
@@ -31,6 +35,13 @@ export interface HistoryEntry {
   error?: string;
   errorKind?: string;
   time: number;
+}
+
+export interface Program {
+  id: string;
+  name: string;
+  source: string;
+  updatedAt: number;
 }
 
 export interface GraphFn {
@@ -70,6 +81,10 @@ export type ListName = (typeof LIST_NAMES)[number];
 export const PALETTE = ['#4f8cff', '#ff5d73', '#22b07d', '#f5a524', '#a874ff', '#00a3c4', '#ff7a45', '#d850b8', '#6fae3f', '#8792a8'];
 
 export const STANDARD_WINDOW: GraphWindow = { xMin: -10, xMax: 10, yMin: -10, yMax: 10, xScl: 0, yScl: 0 };
+
+let lastTime = 0;
+/** Strictly increasing timestamp for history entries (so ClrHome can split entries made in the same millisecond). */
+export const nextTime = () => (lastTime = Math.max(Date.now(), lastTime + 1));
 
 let idCounter = 0;
 export const uid = () => `${Date.now().toString(36)}${(idCounter++).toString(36)}${Math.random().toString(36).slice(2, 6)}`;
@@ -116,6 +131,12 @@ export interface AppState {
   tableStep: number;
   // Statistics
   lists: Record<ListName, number[]>;
+  // Programs
+  programs: Program[];
+  editProgramId: string | null;
+  runRequest: string | null;
+  /** History entries older than this are hidden from the calculator screen (ClrHome / CLEAR) */
+  screenFrom: number;
   // Cross-view requests (not persisted)
   traceRequest: { fnId: string; x: number } | null;
   intent: GraphIntent | null;
@@ -145,6 +166,13 @@ export interface AppState {
   deleteGraph: (id: string) => void;
   setTable: (start: number, step: number) => void;
   setList: (name: ListName, values: number[]) => void;
+  addProgram: (name: string, source?: string) => string;
+  updateProgram: (id: string, p: Partial<Omit<Program, 'id'>>) => void;
+  deleteProgram: (id: string) => void;
+  openProgram: (id: string | null) => void;
+  requestRun: (name: string) => void;
+  clearRunRequest: () => void;
+  clearScreen: () => void;
   requestTrace: (fnId: string, x: number) => void;
   clearTraceRequest: () => void;
   resetAll: () => void;
@@ -179,6 +207,9 @@ function initialData() {
     tableStart: -5,
     tableStep: 1,
     lists: SAMPLE_LISTS,
+    programs: EXAMPLE_PROGRAMS.map((p, i) => ({ id: `ex${i}`, name: p.name, source: p.source, updatedAt: 0 })),
+    editProgramId: null as string | null,
+    screenFrom: 0,
   };
 }
 
@@ -225,6 +256,7 @@ export const useStore = create<AppState>()(
         ...initialData(),
         traceRequest: null,
         intent: null,
+        runRequest: null,
         undoStack: [],
         redoStack: [],
 
@@ -288,10 +320,21 @@ export const useStore = create<AppState>()(
         deleteGraph: (id) => set((s) => ({ savedGraphs: s.savedGraphs.filter((g) => g.id !== id) })),
         setTable: (tableStart, tableStep) => set({ tableStart, tableStep }),
         setList: (name, values) => set((s) => ({ lists: { ...s.lists, [name]: values } })),
+        addProgram: (name, source = '') => {
+          const id = uid();
+          set((s) => ({ programs: [...s.programs, { id, name, source, updatedAt: Date.now() }], editProgramId: id }));
+          return id;
+        },
+        updateProgram: (id, p) => set((s) => ({ programs: s.programs.map((g) => (g.id === id ? { ...g, ...p, updatedAt: Date.now() } : g)) })),
+        deleteProgram: (id) => set((s) => ({ programs: s.programs.filter((g) => g.id !== id), editProgramId: s.editProgramId === id ? null : s.editProgramId })),
+        openProgram: (id) => set({ editProgramId: id, view: 'programs' }),
+        requestRun: (name) => set({ runRequest: name, view: 'calc' }),
+        clearRunRequest: () => set({ runRequest: null }),
+        clearScreen: () => set({ screenFrom: nextTime() }),
         requestTrace: (fnId, x) => set({ traceRequest: { fnId, x }, view: 'graph' }),
         clearTraceRequest: () => set({ traceRequest: null }),
         resetAll: () => {
-          set({ ...initialData(), traceRequest: null, undoStack: [], redoStack: [] });
+          set({ ...initialData(), traceRequest: null, runRequest: null, undoStack: [], redoStack: [] });
         },
       };
     },
@@ -311,6 +354,9 @@ export const useStore = create<AppState>()(
         tableStart: s.tableStart,
         tableStep: s.tableStep,
         lists: s.lists,
+        programs: s.programs,
+        editProgramId: s.editProgramId,
+        screenFrom: s.screenFrom,
       }),
       merge: (persisted, current) => {
         const p = (persisted ?? {}) as Partial<AppState>;

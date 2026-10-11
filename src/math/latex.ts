@@ -2,11 +2,14 @@ import type { Node } from './ast';
 import { FN_MAP, displayName } from './functions';
 
 /** Precedence levels used to decide where parentheses are required. */
-const P = { add: 1, mul: 2, unary: 3, pow: 4, post: 5, atom: 6 } as const;
+const P = { logic: 0.2, rel: 0.5, add: 1, mul: 2, unary: 3, pow: 4, post: 5, atom: 6 } as const;
+const REL_TEX: Record<string, string> = { '=': '=', '≠': '\\ne', '<': '<', '>': '>', '≤': '\\le', '≥': '\\ge' };
 
 function prec(n: Node): number {
   switch (n.type) {
     case 'binary':
+      if (n.op === 'and' || n.op === 'or' || n.op === 'xor') return P.logic;
+      if (n.op in REL_TEX) return P.rel;
       if (n.op === '+' || n.op === '-') return P.add;
       if (n.op === '^') return P.pow;
       if (n.op === '/') return P.atom; // \frac is self-delimiting
@@ -79,6 +82,14 @@ export function toTex(n: Node): string {
     case 'binary': {
       const { op, left, right } = n;
       if (op === '/') return `\\frac{${toTex(left)}}{${toTex(right)}}`;
+      if (op === 'and' || op === 'or' || op === 'xor') {
+        const side = (k: Node) => (prec(k) < P.logic ? paren(toTex(k)) : toTex(k));
+        return `${side(left)}\\ \\mathrm{${op}}\\ ${side(right)}`;
+      }
+      if (op in REL_TEX) {
+        const side = (k: Node) => (prec(k) <= P.rel ? paren(toTex(k)) : toTex(k));
+        return `${side(left)} ${REL_TEX[op]} ${side(right)}`;
+      }
       if (op === '^') {
         const base = prec(left) < P.atom || left.type === 'call' && !/^(abs|sqrt|cbrt|root|floor|ceil)$/.test(left.name) && !/^Y/.test(left.name)
           ? paren(toTex(left))
@@ -86,7 +97,7 @@ export function toTex(n: Node): string {
         return `${base}^{${toTex(right)}}`;
       }
       if (op === '+' || op === '-') {
-        const l = toTex(left);
+        const l = prec(left) < P.add ? paren(toTex(left)) : toTex(left);
         const needR = prec(right) <= (op === '-' ? P.add : 0) || right.type === 'unary' || (right.type === 'num' && right.value < 0);
         const r = needR ? paren(toTex(right)) : toTex(right);
         return `${l}${op}${r}`;

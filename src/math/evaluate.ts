@@ -197,6 +197,8 @@ export function applyNumeric(name: string, a: number[], angle: AngleMode, random
       return S.poissonPdf(a[0], a[1]);
     case 'poissoncdf':
       return S.poissonCdf(a[0], a[1]);
+    case 'not':
+      return x === 0 ? 1 : 0;
     case 'rand':
       return random();
     case 'randint': {
@@ -293,8 +295,49 @@ function binaryScalar(op: string, a: Scalar, b: Scalar): Scalar {
     case 'nPr':
     case 'nCr':
       return combinatoric(op === 'nPr' ? 'npr' : 'ncr', a, b);
+    case '=':
+    case '≠':
+    case '<':
+    case '>':
+    case '≤':
+    case '≥': {
+      const c = a.r && b.r ? Q.cmp(a.r, b.r) : compareNum(a.n, b.n);
+      return bool(relHolds(op, c));
+    }
+    case 'and':
+      return bool(a.n !== 0 && b.n !== 0);
+    case 'or':
+      return bool(a.n !== 0 || b.n !== 0);
+    case 'xor':
+      return bool((a.n !== 0) !== (b.n !== 0));
   }
   fail('SYNTAX', `Unknown operator ${op}`);
+}
+
+const bool = (v: boolean): Scalar => (v ? scalar(1, Q.R_ONE) : scalar(0, Q.R_ZERO));
+
+/** Compare floats, treating values equal to ~13 significant digits as equal (like the TI-84). */
+export function compareNum(a: number, b: number): number {
+  if (a === b) return 0;
+  if (Math.abs(a - b) <= 1e-13 * Math.max(Math.abs(a), Math.abs(b))) return 0;
+  return a < b ? -1 : 1;
+}
+
+export function relHolds(op: string, c: number): boolean {
+  switch (op) {
+    case '=':
+      return c === 0;
+    case '≠':
+      return c !== 0;
+    case '<':
+      return c < 0;
+    case '>':
+      return c > 0;
+    case '≤':
+      return c <= 0;
+    default:
+      return c >= 0;
+  }
 }
 
 function power(a: Scalar, b: Scalar): Scalar {
@@ -785,6 +828,21 @@ export function compileWith(node: Node, ctx: EvalContext, bound: string[], overr
             return (env) => S.nPr(l(env), r(env));
           case 'nCr':
             return (env) => S.nCr(l(env), r(env));
+          case 'and':
+            return (env) => (l(env) !== 0 && r(env) !== 0 ? 1 : 0);
+          case 'or':
+            return (env) => (l(env) !== 0 || r(env) !== 0 ? 1 : 0);
+          case 'xor':
+            return (env) => ((l(env) !== 0) !== (r(env) !== 0) ? 1 : 0);
+          default: {
+            const op = n.op;
+            return (env) => {
+              const a = l(env);
+              const b = r(env);
+              if (Number.isNaN(a) || Number.isNaN(b)) return NaN;
+              return relHolds(op, compareNum(a, b)) ? 1 : 0;
+            };
+          }
         }
         break;
       }

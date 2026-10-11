@@ -5,9 +5,11 @@ Lumen is a web-based graphing calculator built around the TI-84 Plus CE workflow
 ## Features
 
 **Calculate**
-- Laid out like a TI-84 Plus CE: a black, scrollable screen on top — you type straight onto it (no input box), with the entry line right under the previous answers — and the complete keypad below it, pill-shaped keys with cyan 2nd and green ALPHA labels printed above each key, with every key (and its amber 2nd and green ALPHA labels) always visible at desktop, iPad and phone sizes.
-- Keys in TI-84 order: Y= / WINDOW / ZOOM / TRACE / GRAPH (with STAT PLOT, TBLSET, FORMAT, CALC, TABLE on 2nd) jump to the matching tool; 2nd, ALPHA (and A-LOCK) for letters A–Z/θ, MODE (angle, Float/Fix, theme; 2nd QUIT), DEL, X,T,θ,n, STAT (2nd LIST), MATH, APPS, SOLVE, VARS (2nd DISTR), CLEAR, round arrow pad, UNDO/REDO for the entry line (also Ctrl+Z / Ctrl+Shift+Z), STO, ANS, (−) and ENTER (2nd ENTRY). The TI's PRGM and ON keys are replaced by SOLVE and ANS since programs aren't supported.
+- Laid out like a TI-84 Plus CE: a black, scrollable screen on top — you type straight onto it (no input box), with the entry line right under the previous answers — and the complete keypad below it, with each key's 2nd (amber) and ALPHA (green) labels shown on the key, with every key (and its amber 2nd and green ALPHA labels) always visible at desktop, iPad and phone sizes.
+- Keys in TI-84 order: Y= / WINDOW / ZOOM / TRACE / GRAPH (with STAT PLOT, TBLSET, FORMAT, CALC, TABLE on 2nd) jump to the matching tool; 2nd, ALPHA (and A-LOCK) for letters A–Z/θ, MODE (angle, Float/Fix, theme; 2nd QUIT), DEL, X,T,θ,n, STAT (2nd LIST), MATH, APPS, PRGM, VARS (2nd DISTR), CLEAR, arrow pad, PRGM (2nd SOLVE), STO→, ANS, (−) and ENTER (2nd ENTRY). The TI's ON key is replaced by ANS.
 - ▲/▼ (on screen or on the keyboard) scroll through the screen and highlight earlier expressions or answers; ENTER pastes the highlighted line into the entry line, exactly like the TI-84 home screen.
+- On phones the calculator fills the whole screen (no tab bar); the Y=, GRAPH, TABLE, STAT, PRGM, APPS, HIST and FORMAT keys open the other tools. CLEAR on an empty line clears the screen, as on a TI-84.
+- Comparisons and logic: `=`, `≠` (`!=`, `<>`), `<`, `>`, `≤` (`<=`), `≥` (`>=`), `and`, `or`, `xor`, `not(` return 1 or 0, like the TI-84 (`2+2=4` gives 1).
 - Works with mouse, touch and a physical keyboard (Enter, Esc, ↑/↓ screen scrolling, typing `+` on an empty line continues from `Ans`, Enter on an empty line repeats the last entry).
 - Live typeset preview (KaTeX) and live result while typing; scrollable history with tap-to-reuse expression or result, copy and delete.
 - **Exact results** for rational arithmetic using BigInt fractions (`1/3+1/6 = 1/2`, `0.1+0.2 = 3/10`, `20!`, `√(9/4) = 3/2`, `sin(30) = 1/2` in degree mode), shown with the decimal approximation. Anything irrational is shown as a decimal and never labelled exact.
@@ -23,6 +25,12 @@ Lumen is a web-based graphing calculator built around the TI-84 Plus CE workflow
 - Trace: click/tap a curve, drag the cursor along it, or use ←/→ (↑/↓ switch curves).
 - Analysis: value (exact when possible), all zeros, minima, maxima and intersections in the visible window (with prev/next navigation), numerical dy/dx, tangent line, and definite integral with shading. Numerical results are badged "≈ numeric".
 - Save/load named graphs (functions + window); example graph sets.
+
+**Programs** — a TI-BASIC-style language for writing your own programs:
+- PRGM key with EXEC (pastes `prgmNAME`; ENTER runs it), EDIT and NEW, plus a Programs section with an editor (line numbers, command buttons, live syntax checking with line-numbered errors, rename/delete) and a command reference.
+- Statements: `expr→A`, `Disp`, `Input`, `Prompt`, `If` (single line or `Then`/`Else`/`End`), `For(`, `While`, `Repeat`, `Lbl`/`Goto`, `Pause`, `ClrHome`, `Stop`, `Return`, and `prgmNAME` to call other programs; `:` separates statements on one line.
+- Programs run on the calculator screen, share the calculator's variables (A–Z, θ, x, Ans) and lists (L1–L6), ask for input on the entry line, and can be stopped at any time (Stop button or Esc) — infinite loops never freeze the app. Errors report the program and line.
+- Examples included: QUAD (quadratic roots), FIB (Fibonacci) and GUESS (number-guessing game).
 
 **Table** — X/Y table for any set of functions with configurable TblStart/ΔTbl, an "evaluate at x" row, and click-through from a cell to that point on the graph.
 
@@ -67,6 +75,7 @@ src/
     polynomial.ts    structural polynomial extraction used by the solver
     solver.ts        exact linear/quadratic/2×2 solving with steps; numeric fallback
     stats.ts         1-/2-variable statistics and regressions
+    program.ts       TI-BASIC-style compiler (to a flat jump list) and async interpreter
     latex.ts         AST → TeX for KaTeX rendering
     format.ts        Float/Fix number formatting, exact vs. approximate display
   graph/
@@ -84,7 +93,7 @@ Layers are independent: parsing, numerical evaluation, graph sampling and UI ren
 
 ## Testing
 
-`npm test` runs 55 unit tests covering operator precedence, negative numbers and implicit multiplication, exact fractions, degree/radian behaviour, domain/overflow/syntax errors, special functions and distributions against reference values, roots/extrema/intersections/derivatives/integrals against known answers, discontinuity handling in the sampler, the solver (linear, quadratic, surds, complex, cubic, transcendental, systems), statistics/regressions and the entry-line editing logic.
+`npm test` runs 86 unit tests covering the program interpreter (loops, branches, Goto, Input/Prompt, nested calls, compile/runtime errors, cancellation, the bundled examples), relational/logic operators, operator precedence, negative numbers and implicit multiplication, exact fractions, degree/radian behaviour, domain/overflow/syntax errors, special functions and distributions against reference values, roots/extrema/intersections/derivatives/integrals against known answers, discontinuity handling in the sampler, the solver (linear, quadratic, surds, complex, cubic, transcendental, systems), statistics/regressions and the entry-line editing logic.
 
 During development the production build was also exercised in headless Chromium at desktop (1440×900), iPad Pro 11″ and iPhone 14 sizes: keypad and keyboard entry (including a check that all 50 keys fit on screen at 1440×900, 390×664 and 320×568 without scrolling), ▲/▼ screen highlighting and ENTER paste, ALPHA letters, 2nd functions, Y=/WINDOW/TRACE/CALC/STAT PLOT navigation, Ans chaining, variable storage, degree mode, persistence across reloads, click-to-trace, keyboard trace, wheel zoom, drag pan, pinch zoom (synthetic touch pointers), zeros/intersections/integral/tangent tools, table → graph navigation, the solver, regression plots and the light theme.
 
@@ -98,4 +107,5 @@ During development the production build was also exercised in headless Chromium 
 - Implicit multiplication has the same precedence as `*`, evaluated left to right, so `1/2x` means `(1/2)·x` (TI-84 behaviour). Functions require parentheses (`sin(x)`, not `sin x`), except `√2`.
 - Scientific notation uses the `ᴇ` key (`2ᴇ3`); a typed `e` always means Euler's number.
 - Data lives in the browser's localStorage; clearing site data or using a private window loses it, and it does not sync between devices.
+- Programs support numbers and lists only — no string variables, `Menu(`, `Output(`, `getKey`, or drawing commands. `!=` means not-equal, so write `3! = 6` (with a space) to compare a factorial.
 - Real-device testing was done with emulated viewports rather than physical iPhones/iPads; Safari-specific quirks may remain.

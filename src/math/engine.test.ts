@@ -208,3 +208,38 @@ describe('latex', () => {
     expect(toTex(parse('a-(b-c)'))).toBe('A-\\left(B-C\\right)');
   });
 });
+
+describe('relations and logic (used by programs)', () => {
+  it.each([
+    ['2+2=4', 1],
+    ['3>5', 0],
+    ['1/3=2/6', 1],
+    ['0.1+0.2=0.3', 1],
+    ['2≤2', 1],
+    ['2<=1', 0],
+    ['3≥4', 0],
+    ['3!=6', 1], // != is not-equal
+    ['3! = 6', 1], // factorial then equals
+    ['4≠5', 1],
+    ['1<>1', 0],
+    ['1<2 and 2<3', 1],
+    ['1>2 or 2>3', 0],
+    ['1 xor 1', 0],
+    ['not(0)', 1],
+    ['(2>1)+(3>1)', 2],
+    ['2+3*4>10', 1],
+  ])('%s = %d', (src, expected) => {
+    expect(num(src)).toBe(expected);
+  });
+  it('keeps ALPHA letters O,R as variables', () => {
+    const c = ctx();
+    c.vars.O = scalar(2);
+    c.vars.R = scalar(5);
+    expect(num('OR', c)).toBe(10);
+  });
+  it('stores into x and lists', () => {
+    const r = calculate('{1,2}→L3', ctx());
+    expect(r.ok && r.storedTo).toBe('L3');
+    expect(toTex(parse('A≠B and C≤2'))).toBe('A \\ne B\\ \\mathrm{and}\\ C \\le 2');
+  });
+});

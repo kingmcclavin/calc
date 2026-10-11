@@ -1,7 +1,7 @@
 import type { EditOp } from './editing';
 import type { GraphIntent, ViewId } from '../state/store';
 
-export type MenuId = 'math' | 'vars' | 'apps' | 'mode';
+export type MenuId = 'math' | 'vars' | 'apps' | 'mode' | 'prgm';
 
 export type KeyAction =
   | EditOp
@@ -28,7 +28,7 @@ export interface KeyFace {
 
 export interface KeyDef extends KeyFace {
   id: string;
-  variant: 'num' | 'fn' | 'op' | 'enter' | 'shift' | 'alpha' | 'mod' | 'clear' | 'top' | 'undo';
+  variant: 'num' | 'fn' | 'op' | 'enter' | 'shift' | 'alpha' | 'mod' | 'clear' | 'top';
   second?: KeyFace;
   /** Letter typed when ALPHA is active (A–Z, θ) */
   alpha?: string;
@@ -54,49 +54,47 @@ export const KEYS: KeyDef[] = [
   { id: '2nd', label: '2nd', variant: 'shift', action: { type: 'second' }, title: 'Second function: use the amber label on the next key' },
   { id: 'mode', label: 'MODE', variant: 'mod', action: { type: 'menu', menu: 'mode' }, title: 'Angle mode, number display and theme', second: { label: 'QUIT', action: { type: 'quit' }, title: 'Clear the entry line and return to the bottom of the screen' } },
   { id: 'del', label: 'DEL', variant: 'mod', action: { type: 'backspace' }, title: 'Delete before cursor (Backspace)', second: { label: 'DEL→', action: { type: 'delete' }, title: 'Delete after cursor' } },
-  { id: 'undo', label: '↺', ariaLabel: 'Undo', variant: 'undo', action: { type: 'undo' }, title: 'Undo the last change to the entry line (Ctrl+Z)' },
   { id: 'alpha', label: 'ALPHA', variant: 'alpha', action: { type: 'alpha' }, title: 'Type a letter: the green label on the next key', second: { label: 'A-LOCK', action: { type: 'alphaLock' }, title: 'Keep typing letters until ALPHA is pressed again' } },
   { id: 'xt', label: 'X,T,θ,n', variant: 'mod', action: ins('x'), title: 'Variable x' },
   { id: 'stat', label: 'STAT', variant: 'mod', action: { type: 'nav', view: 'stats' }, title: 'Lists, statistics & regression', second: { label: 'LIST', action: { type: 'menu', menu: 'vars', tab: 'lists' }, title: 'Lists L1–L6' } },
-  { id: 'redo', label: '↻', ariaLabel: 'Redo', variant: 'undo', action: { type: 'redo' }, title: 'Redo (Ctrl+Shift+Z)' },
 
   // Row 4
   { id: 'math', label: 'MATH', variant: 'mod', alpha: 'A', action: { type: 'menu', menu: 'math' }, title: 'Math functions: rounding, probability, calculus, lists, distributions', second: { label: 'TEST', action: { type: 'menu', menu: 'math', tab: 'num' }, title: 'Number functions' } },
   { id: 'apps', label: 'APPS', variant: 'mod', alpha: 'B', action: { type: 'menu', menu: 'apps' }, title: 'Open another tool', second: { label: 'ANGLE', action: ins('°'), title: 'Degree marker: sin(30°) works in radian mode' } },
-  { id: 'prgm', label: 'SOLVE', variant: 'mod', alpha: 'C', action: { type: 'nav', view: 'solver' }, title: 'Equation solver' },
+  { id: 'prgm', label: 'PRGM', variant: 'mod', alpha: 'C', action: { type: 'menu', menu: 'prgm' }, title: 'Programs: run, edit or create', second: { label: 'SOLVE', action: { type: 'nav', view: 'solver' }, title: 'Equation solver' } },
   { id: 'vars', label: 'VARS', variant: 'mod', action: { type: 'menu', menu: 'vars' }, title: 'Variables A–Z, Ans, Y1… and lists', second: { label: 'DISTR', action: { type: 'menu', menu: 'math', tab: 'distr' }, title: 'Probability distributions' } },
   { id: 'clear', label: 'CLEAR', variant: 'clear', action: { type: 'clear' }, title: 'Clear the entry line (Esc)' },
 
   // Row 5
-  { id: 'inv', label: 'X⁻¹', variant: 'fn', alpha: 'D', action: ins('⁻¹'), binaryOp: true, title: 'Reciprocal', second: { label: '!', action: ins('!'), binaryOp: true, title: 'Factorial' } },
-  { id: 'sin', label: 'SIN', variant: 'fn', alpha: 'E', action: fn('sin('), title: 'Sine', second: { label: 'SIN⁻¹', action: fn('asin('), title: 'Inverse sine' } },
-  { id: 'cos', label: 'COS', variant: 'fn', alpha: 'F', action: fn('cos('), title: 'Cosine', second: { label: 'COS⁻¹', action: fn('acos('), title: 'Inverse cosine' } },
-  { id: 'tan', label: 'TAN', variant: 'fn', alpha: 'G', action: fn('tan('), title: 'Tangent', second: { label: 'TAN⁻¹', action: fn('atan('), title: 'Inverse tangent' } },
+  { id: 'inv', label: 'x⁻¹', variant: 'fn', alpha: 'D', action: ins('⁻¹'), binaryOp: true, title: 'Reciprocal', second: { label: '!', action: ins('!'), binaryOp: true, title: 'Factorial' } },
+  { id: 'sin', label: 'sin', variant: 'fn', alpha: 'E', action: fn('sin('), title: 'Sine', second: { label: 'sin⁻¹', action: fn('asin('), title: 'Inverse sine' } },
+  { id: 'cos', label: 'cos', variant: 'fn', alpha: 'F', action: fn('cos('), title: 'Cosine', second: { label: 'cos⁻¹', action: fn('acos('), title: 'Inverse cosine' } },
+  { id: 'tan', label: 'tan', variant: 'fn', alpha: 'G', action: fn('tan('), title: 'Tangent', second: { label: 'tan⁻¹', action: fn('atan('), title: 'Inverse tangent' } },
   { id: 'pow', label: '^', variant: 'fn', alpha: 'H', action: ins('^'), binaryOp: true, title: 'Power', second: { label: 'π', action: ins('π'), title: 'Pi' } },
 
   // Row 6
-  { id: 'sq', label: 'X²', variant: 'fn', alpha: 'I', action: ins('²'), binaryOp: true, title: 'Square', second: { label: '√', action: fn('√('), title: 'Square root' } },
+  { id: 'sq', label: 'x²', variant: 'fn', alpha: 'I', action: ins('²'), binaryOp: true, title: 'Square', second: { label: '√', action: fn('√('), title: 'Square root' } },
   { id: 'comma', label: ',', variant: 'fn', alpha: 'J', action: ins(','), title: 'Argument separator', second: { label: 'EE', action: ins('ᴇ'), title: 'Scientific notation: 2ᴇ3 = 2000' } },
   { id: 'lp', label: '(', variant: 'fn', alpha: 'K', action: ins('('), title: 'Open parenthesis', second: { label: '{', action: ins('{'), title: 'Start a list' } },
   { id: 'rp', label: ')', variant: 'fn', alpha: 'L', action: ins(')'), title: 'Close parenthesis', second: { label: '}', action: ins('}'), title: 'End a list' } },
   { id: 'div', label: '÷', ariaLabel: 'Divide', variant: 'op', alpha: 'M', action: ins('/'), binaryOp: true, title: 'Divide', second: { label: 'e', action: ins('e'), title: "Euler's number" } },
 
   // Row 7
-  { id: 'log', label: 'LOG', variant: 'fn', alpha: 'N', action: fn('log('), title: 'Base-10 logarithm; log(x, b) for base b', second: { label: '10ˣ', action: ins('10^('), title: '10 to a power' } },
+  { id: 'log', label: 'log', variant: 'fn', alpha: 'N', action: fn('log('), title: 'Base-10 logarithm; log(x, b) for base b', second: { label: '10ˣ', action: ins('10^('), title: '10 to a power' } },
   { id: '7', label: '7', variant: 'num', alpha: 'O', action: ins('7'), title: '7', second: { label: '∛', action: fn('∛('), title: 'Cube root' } },
   { id: '8', label: '8', variant: 'num', alpha: 'P', action: ins('8'), title: '8', second: { label: 'ˣ√', action: fn('root('), title: 'n-th root: root(x, n)' } },
   { id: '9', label: '9', variant: 'num', alpha: 'Q', action: ins('9'), title: '9', second: { label: '|x|', action: fn('abs('), title: 'Absolute value' } },
   { id: 'mul', label: '×', ariaLabel: 'Multiply', variant: 'op', alpha: 'R', action: ins('*'), binaryOp: true, title: 'Multiply', second: { label: 'nPr', action: ins(' nPr '), binaryOp: true, title: 'Permutations' } },
 
   // Row 8
-  { id: 'ln', label: 'LN', variant: 'fn', alpha: 'S', action: fn('ln('), title: 'Natural logarithm', second: { label: 'eˣ', action: ins('e^('), title: 'e to a power' } },
+  { id: 'ln', label: 'ln', variant: 'fn', alpha: 'S', action: fn('ln('), title: 'Natural logarithm', second: { label: 'eˣ', action: ins('e^('), title: 'e to a power' } },
   { id: '4', label: '4', variant: 'num', alpha: 'T', action: ins('4'), title: '4', second: { label: 'L4', action: ins('L4'), title: 'List 4' } },
   { id: '5', label: '5', variant: 'num', alpha: 'U', action: ins('5'), title: '5', second: { label: 'L5', action: ins('L5'), title: 'List 5' } },
   { id: '6', label: '6', variant: 'num', alpha: 'V', action: ins('6'), title: '6', second: { label: 'L6', action: ins('L6'), title: 'List 6' } },
   { id: 'sub', label: '−', ariaLabel: 'Subtract', variant: 'op', alpha: 'W', action: ins('-'), binaryOp: true, title: 'Subtract', second: { label: 'nCr', action: ins(' nCr '), binaryOp: true, title: 'Combinations' } },
 
   // Row 9
-  { id: 'sto', label: 'STO', variant: 'fn', alpha: 'X', action: ins('→'), title: 'Store into a variable, e.g. 5→A', second: { label: 'a/b', action: ins('()/()', { caret: 1 }), title: 'Fraction template' } },
+  { id: 'sto', label: 'STO→', variant: 'fn', alpha: 'X', action: ins('→'), title: 'Store into a variable, e.g. 5→A', second: { label: 'a/b', action: ins('()/()', { caret: 1 }), title: 'Fraction template' } },
   { id: '1', label: '1', variant: 'num', alpha: 'Y', action: ins('1'), title: '1', second: { label: 'L1', action: ins('L1'), title: 'List 1' } },
   { id: '2', label: '2', variant: 'num', alpha: 'Z', action: ins('2'), title: '2', second: { label: 'L2', action: ins('L2'), title: 'List 2' } },
   { id: '3', label: '3', variant: 'num', alpha: 'θ', action: ins('3'), title: '3', second: { label: 'L3', action: ins('L3'), title: 'List 3' } },

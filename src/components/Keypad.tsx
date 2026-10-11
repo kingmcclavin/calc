@@ -1,6 +1,7 @@
 import { memo, useState } from 'react';
 import { ARROWS, KEYS, MATH_MENU, type KeyAction, type KeyDef, type KeyFace, type MenuId } from './keypad';
 import { Dialog } from './ui';
+import { PROGRAM_NAME_RE } from '../math/program';
 import { formatNumber } from '../math/format';
 import { fromStored, LIST_NAMES, useStore, type ThemePref } from '../state/store';
 
@@ -62,25 +63,26 @@ export const Keypad = memo(function Keypad({ onAction }: Props) {
     const main = showSecond ? k.second!.label : showAlpha ? k.alpha! : k.label;
     const title = showSecond ? k.second!.title : showAlpha ? `Letter ${k.alpha}` : k.title;
     return (
-      <div key={k.id} className={`kcell kcell-${k.variant}`} data-cell={k.id}>
-        <span className="klabels" aria-hidden="true">
-          {k.second && <span className="lbl-2nd">{k.second.label}</span>}
-          {k.alpha && <span className="lbl-alpha">{k.alpha}</span>}
-        </span>
-        <button
-          type="button"
-          className={`key key-${k.variant}${showSecond ? ' showing-second' : ''}${showAlpha ? ' showing-alpha' : ''}`}
-          data-key={k.id}
-          title={title}
-          aria-label={showSecond || showAlpha ? title : k.ariaLabel ?? k.title}
-          aria-pressed={k.id === '2nd' ? second : k.id === 'alpha' ? alpha !== 'off' : undefined}
-          // keep focus in the entry line
-          onPointerDown={(e) => e.preventDefault()}
-          onClick={() => press(k)}
-        >
-          <span className="key-main">{main}</span>
-        </button>
-      </div>
+      <button
+        key={k.id}
+        type="button"
+        className={`key key-${k.variant}${showSecond ? ' showing-second' : ''}${showAlpha ? ' showing-alpha' : ''}`}
+        data-key={k.id}
+        title={title}
+        aria-label={showSecond || showAlpha ? title : k.ariaLabel ?? k.title}
+        aria-pressed={k.id === '2nd' ? second : k.id === 'alpha' ? alpha !== 'off' : undefined}
+        // keep focus in the entry line
+        onPointerDown={(e) => e.preventDefault()}
+        onClick={() => press(k)}
+      >
+        {(k.second || k.alpha) && (
+          <span className="key-labels" aria-hidden="true">
+            <span className="lbl-2nd">{k.second?.label ?? ''}</span>
+            <span className="lbl-alpha">{k.alpha ?? ''}</span>
+          </span>
+        )}
+        <span className="key-main">{main}</span>
+      </button>
     );
   };
 
@@ -117,6 +119,7 @@ export const Keypad = memo(function Keypad({ onAction }: Props) {
       {menu?.id === 'math' && <MathMenu initialTab={menu.tab} onClose={() => setMenu(null)} onPick={insert} />}
       {menu?.id === 'vars' && <VarsMenu onClose={() => setMenu(null)} onPick={insert} />}
       {menu?.id === 'mode' && <ModeMenu onClose={() => setMenu(null)} />}
+      {menu?.id === 'prgm' && <PrgmMenu onClose={() => setMenu(null)} onExec={(name) => insert(`prgm${name}`)} />}
       {menu?.id === 'apps' && (
         <AppsMenu
           onClose={() => setMenu(null)}
@@ -209,6 +212,7 @@ const APPS: Array<{ label: string; description: string; action: KeyAction }> = [
   { label: 'Table', description: 'X/Y table of values', action: { type: 'nav', view: 'table' } },
   { label: 'Statistics', description: 'Lists, 1-Var/2-Var stats, regression, distributions', action: { type: 'nav', view: 'stats' } },
   { label: 'Solver', description: 'Equations, quadratics and 2×2 systems with steps', action: { type: 'nav', view: 'solver' } },
+  { label: 'Programs', description: 'Write and edit TI-BASIC-style programs', action: { type: 'nav', view: 'programs' } },
   { label: 'History', description: 'Past calculations and saved graphs', action: { type: 'nav', view: 'history' } },
   { label: 'Settings', description: 'Appearance, precision and data', action: { type: 'nav', view: 'settings' } },
 ];
@@ -284,6 +288,89 @@ export function VarsMenu({ onClose, onPick }: { onClose: () => void; onPick: (s:
           </div>
         </div>
       </div>
+    </Dialog>
+  );
+}
+
+/** TI-style PRGM menu: EXEC pastes prgmNAME, EDIT opens the editor, NEW creates a program. */
+function PrgmMenu({ onClose, onExec }: { onClose: () => void; onExec: (name: string) => void }) {
+  const programs = useStore((s) => s.programs);
+  const openProgram = useStore((s) => s.openProgram);
+  const addProgram = useStore((s) => s.addProgram);
+  const setView = useStore((s) => s.setView);
+  const [tab, setTab] = useState<'exec' | 'edit' | 'new'>('exec');
+  const [name, setName] = useState('');
+  const upper = name.toUpperCase();
+  const nameError = !upper
+    ? null
+    : !PROGRAM_NAME_RE.test(upper)
+      ? 'Up to 8 letters/digits, starting with a letter'
+      : programs.some((p) => p.name === upper)
+        ? 'A program with this name already exists'
+        : null;
+  const create = () => {
+    if (!upper || nameError) return;
+    addProgram(upper);
+    setView('programs');
+    onClose();
+  };
+  const sorted = [...programs].sort((a, b) => a.name.localeCompare(b.name));
+  return (
+    <Dialog title="Programs" onClose={onClose}>
+      <div className="tabs" role="tablist" style={{ padding: '0 0 12px' }}>
+        {(['exec', 'edit', 'new'] as const).map((t) => (
+          <button key={t} role="tab" aria-selected={tab === t} onClick={() => setTab(t)}>
+            {t.toUpperCase()}
+          </button>
+        ))}
+      </div>
+      {tab !== 'new' &&
+        (sorted.length ? (
+          <div className="menu-grid">
+            {sorted.map((p) => (
+              <button
+                key={p.id}
+                className="menu-item"
+                onClick={() => {
+                  if (tab === 'exec') onExec(p.name);
+                  else {
+                    openProgram(p.id);
+                    onClose();
+                  }
+                }}
+              >
+                <b>{p.name}</b>
+                <small>{p.source.split('\n').length} lines</small>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <p className="muted">No programs yet — use NEW.</p>
+        ))}
+      {tab === 'exec' && sorted.length > 0 && <p className="muted small">Choosing a program pastes prgmNAME; press ENTER to run it.</p>}
+      {tab === 'new' && (
+        <div className="stack">
+          <label className="field">
+            <span>Program name</span>
+            <input
+              className={`input${nameError ? ' invalid' : ''}`}
+              value={name}
+              maxLength={8}
+              autoCapitalize="characters"
+              autoFocus
+              onChange={(e) => setName(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && create()}
+              placeholder="e.g. AREA"
+            />
+          </label>
+          {nameError && <div className="error-text">{nameError}</div>}
+          <div>
+            <button className="btn primary" disabled={!upper || !!nameError} onClick={create}>
+              Create &amp; edit
+            </button>
+          </div>
+        </div>
+      )}
     </Dialog>
   );
 }

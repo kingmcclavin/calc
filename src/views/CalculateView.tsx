@@ -6,16 +6,28 @@ import { Tex } from '../components/Tex';
 import { copyText } from '../components/ui';
 import { IconCopy, IconTrash } from '../components/Icons';
 import { calculate } from '../math/engine';
+import type { EvalContext } from '../math/evaluate';
+import { runProgram, ProgramError, type ProgramIO } from '../math/program';
 import { formatValue } from '../math/format';
 import { useEvalContext } from '../state/context';
-import { uid, useStore, type HistoryEntry } from '../state/store';
+import { nextTime, uid, useStore, type HistoryEntry, type ListName } from '../state/store';
+
+/** Entries currently on the calculator screen (ClrHome / CLEAR hide older ones). */
+const visibleHistory = () => {
+  const st = useStore.getState();
+  return st.history.filter((h) => h.time >= st.screenFrom);
+};
 
 const OPERATOR_KEYS = new Set(['+', '*', '/', '^']);
 
 export function CalculateView() {
   const input = useStore((s) => s.input);
   const setInput = useStore((s) => s.setInput);
-  const history = useStore((s) => s.history);
+  const allHistory = useStore((s) => s.history);
+  const screenFrom = useStore((s) => s.screenFrom);
+  const history = useMemo(() => allHistory.filter((h) => h.time >= screenFrom), [allHistory, screenFrom]);
+  const runRequest = useStore((s) => s.runRequest);
+  const clearRunRequest = useStore((s) => s.clearRunRequest);
   const addHistory = useStore((s) => s.addHistory);
   const removeHistory = useStore((s) => s.removeHistory);
   const setVar = useStore((s) => s.setVar);
@@ -86,14 +98,19 @@ export function CalculateView() {
         approxTex: f.approxTex,
         resultText: f.text,
         exact: f.exact,
-        time: Date.now(),
+        time: nextTime(),
       };
+      const target = res.storedTo;
+      if (target && /^L[1-6]$/.test(target) !== (res.value.kind === 'list')) {
+        setError({ kind: 'DATA TYPE', message: res.value.kind === 'list' ? 'Lists can only be stored in L1–L6' : `Only a list can be stored in ${target}` });
+        return;
+      }
       addHistory(entry);
       if (res.value.kind === 'scalar') {
         setVar('Ans', res.value);
-        if (res.storedTo) setVar(res.storedTo, res.value);
-      } else if (res.storedTo) {
-        setError({ kind: 'DATA TYPE', message: 'Only numbers can be stored in variables' });
+        if (target) setVar(target, res.value);
+      } else if (target) {
+        useStore.getState().setList(target as ListName, res.value.items.map((it) => it.n));
       }
       record(src, '');
       setInput('');
@@ -104,12 +121,122 @@ export function CalculateView() {
   );
 
   const lineText = (row: number) => {
-    const h = useStore.getState().history[row >> 1];
+    const h = visibleHistory()[row >> 1];
     if (!h) return '';
+    if (h.kind === 'text') return '';
     return row % 2 === 0 ? h.input : h.resultText ?? '';
   };
 
+  /* ------------------------------ programs ------------------------------ */
+  const [run, setRun] = useState<{ name: string; prompt: string | null; paused: boolean } | null>(null);
+  const runningRef = useRef(false);
+  const cancelRef = useRef(false);
+  const resolverRef = useRef<((s: string) => void) | null>(null);
+  const promptRef = useRef<string | null>(null);
+  const fmtRef = useRef(fmt);
+  fmtRef.current = fmt;
+  const ctxRef = useRef<EvalContext>(ctx);
+  ctxRef.current = ctx;
+
+  const push = (e: Partial<HistoryEntry>) => addHistory({ id: uid(), input: '', inputTex: '', time: nextTime(), ...e });
+
+  const startProgram = useCallback(
+    async (rawName: string) => {
+      const name = rawName.toUpperCase();
+      if (runningRef.current) return;
+      const st = useStore.getState();
+      if (!st.programs.some((p) => p.name === name)) {
+        setError({ kind: 'UNDEFINED', message: `There is no program named ${name} — create it with PRGM ▸ NEW` });
+        return;
+      }
+      record(st.input, '');
+      setInput('');
+      setError(null);
+      setSel(null);
+      push({ input: `prgm${name}`, inputTex: `\\mathrm{prgm${name.replace('θ', '\\theta ')}}` });
+      cancelRef.current = false;
+      runningRef.current = true;
+      setRun({ name, prompt: null, paused: false });
+      const base = ctxRef.current;
+      const local: EvalContext = { ...base, vars: { ...base.vars }, lists: { ...base.lists } };
+      const io: ProgramIO = {
+        text: (t) => push({ kind: 'text', text: t }),
+        value: (v) => {
+          const f = formatValue(v, fmtRef.current);
+          push({ kind: 'value', resultTex: f.tex, resultText: f.text, approxTex: f.approxTex });
+        },
+        input: (prompt) =>
+          new Promise((resolve) => {
+            promptRef.current = prompt;
+            resolverRef.current = resolve;
+            setRun((r) => r && { ...r, prompt });
+          }),
+        pause: () =>
+          new Promise((resolve) => {
+            resolverRef.current = () => resolve();
+            setRun((r) => r && { ...r, paused: true });
+          }),
+        clear: () => useStore.getState().clearScreen(),
+        store: (n, v) => {
+          if (v.kind === 'list') useStore.getState().setList(n as ListName, v.items.map((it) => it.n));
+          else useStore.getState().setVar(n, v);
+        },
+        getProgram: (n) => useStore.getState().programs.find((p) => p.name === n)?.source ?? null,
+        cancelled: () => cancelRef.current,
+      };
+      try {
+        const res = await runProgram(name, local, io);
+        push({ kind: 'value', resultTex: res.stoppedByUser ? '\\text{Break}' : '\\text{Done}', resultText: '' });
+      } catch (e) {
+        const pe = e as ProgramError;
+        const where = pe.line ? ` (prgm${pe.program ?? name}, line ${pe.line})` : '';
+        push({ kind: 'text', text: `ERR:${pe.kind ?? 'ERROR'} ${pe.message}${where}` });
+      } finally {
+        runningRef.current = false;
+        resolverRef.current = null;
+        promptRef.current = null;
+        setRun(null);
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [setInput],
+  );
+
+  const stopProgram = useCallback(() => {
+    cancelRef.current = true;
+    const r = resolverRef.current;
+    resolverRef.current = null;
+    r?.('0');
+  }, []);
+
+  // "Run" from the program editor
+  useEffect(() => {
+    if (!runRequest) return;
+    clearRunRequest();
+    void startProgram(runRequest);
+  }, [runRequest, clearRunRequest, startProgram]);
+
+  // Stop a running program when leaving the calculator
+  useEffect(() => () => stopProgram(), [stopProgram]);
+
   const submit = useCallback(() => {
+    if (runningRef.current) {
+      // A running program is waiting for Input / Prompt / Pause
+      const resolve = resolverRef.current;
+      if (!resolve) return;
+      const src = useStore.getState().input;
+      if (promptRef.current !== null) {
+        if (!src.trim()) return;
+        push({ kind: 'text', text: `${promptRef.current}${src}` });
+        record(src, '');
+        setInput('');
+      }
+      resolverRef.current = null;
+      promptRef.current = null;
+      setRun((r) => r && { ...r, prompt: null, paused: false });
+      resolve(src);
+      return;
+    }
     if (sel !== null) {
       // ENTER on a highlighted line pastes it into the entry line, like the TI-84
       inputRef.current?.apply({ type: 'insert', text: lineText(sel) });
@@ -119,16 +246,25 @@ export function CalculateView() {
     const src = useStore.getState().input;
     if (!src.trim()) {
       // Enter on an empty line repeats the last entry (handy for Ans+1 iterations)
-      const last = useStore.getState().history.at(-1);
-      if (last) evaluateInput(last.input);
+      const last = [...visibleHistory()].reverse().find((h) => !h.kind && h.input);
+      if (last) {
+        const pm = /^prgm(.+)$/.exec(last.input);
+        if (pm) void startProgram(pm[1]);
+        else evaluateInput(last.input);
+      }
+      return;
+    }
+    const pm = /^\s*prgm\s*([A-Za-z0-9θ]+)\s*$/i.exec(src);
+    if (pm) {
+      void startProgram(pm[1]);
       return;
     }
     evaluateInput(src);
-  }, [evaluateInput, sel]);
+  }, [evaluateInput, sel, startProgram]);
 
   /** ▲/▼: move the highlight through the screen's lines. */
   const moveSel = useCallback((dir: -1 | 1, page = false) => {
-    const rows = useStore.getState().history.length * 2;
+    const rows = visibleHistory().length * 2;
     if (!rows) return;
     const step = page ? 6 : 1;
     setSel((cur) => {
@@ -195,7 +331,14 @@ export function CalculateView() {
         t.apply({ type: 'insert', text: `Ans${a.text.trimStart()}` });
         return;
       }
-      if (a.type === 'clear') setError(null);
+      if (a.type === 'clear') {
+        setError(null);
+        // CLEAR on an empty entry line clears the screen, as on the TI-84
+        if (!useStore.getState().input && !runningRef.current) {
+          useStore.getState().clearScreen();
+          return;
+        }
+      }
       t.apply(a);
     },
     [submit, moveSel, navigate, setInput],
@@ -216,7 +359,8 @@ export function CalculateView() {
       moveSel(1, e.key === 'PageDown');
     } else if (e.key === 'Escape') {
       e.preventDefault();
-      if (sel !== null) setSel(null);
+      if (runningRef.current) stopProgram();
+      else if (sel !== null) setSel(null);
       else {
         record(input, '');
         setInput('');
@@ -238,34 +382,59 @@ export function CalculateView() {
     <div className="calc-layout">
       <section className="calc-display" aria-label="Calculator screen" onClick={() => !isTouch && inputRef.current?.focus()}>
         <div className="history-scroll" ref={scrollRef} role="log" aria-label="Calculator screen">
-          {history.map((h, i) => (
-            <div key={h.id} className="hist-entry">
-              <button className={`hist-input${sel === i * 2 ? ' selected' : ''}`} data-row={i * 2} title="Reuse this expression" onClick={() => insertText(h.input)}>
-                <Tex tex={h.inputTex} label={h.input} />
-              </button>
-              <div className="hist-result-row">
-                <div className="hist-actions">
-                  <button className="icon-btn sm" title="Copy result" aria-label="Copy result" onClick={() => copyText(h.resultText ?? '')}>
-                    <IconCopy />
-                  </button>
-                  <button className="icon-btn sm" title="Remove from history" aria-label="Remove from history" onClick={() => removeHistory(h.id)}>
-                    <IconTrash />
-                  </button>
-                </div>
-                <button className={`hist-result${sel === i * 2 + 1 ? ' selected' : ''}`} data-row={i * 2 + 1} title="Insert this result" onClick={() => insertText(h.resultText ?? '')}>
+          {history.map((h, i) =>
+            h.kind === 'text' ? (
+              <div key={h.id} className={`hist-line${h.text?.startsWith('ERR:') ? ' err' : ''}`}>
+                {h.text || '\u00a0'}
+              </div>
+            ) : h.kind === 'value' ? (
+              <div key={h.id} className="hist-line value">
+                <button className={`hist-result${sel === i * 2 + 1 ? ' selected' : ''}`} data-row={i * 2 + 1} onClick={() => h.resultText && insertText(h.resultText)}>
                   <Tex tex={h.resultTex ?? ''} label={h.resultText} />
                 </button>
               </div>
-              {h.approxTex && (
-                <div className="hist-approx" title="The answer above is exact; this is its decimal value">
-                  <Tex tex={`\\approx ${h.approxTex}`} />
-                </div>
-              )}
-            </div>
-          ))}
+            ) : (
+              <div key={h.id} className="hist-entry">
+                <button className={`hist-input${sel === i * 2 ? ' selected' : ''}`} data-row={i * 2} title="Reuse this expression" onClick={() => insertText(h.input)}>
+                  <Tex tex={h.inputTex} label={h.input} />
+                </button>
+                {h.resultTex !== undefined && (
+                  <div className="hist-result-row">
+                    <div className="hist-actions">
+                      <button className="icon-btn sm" title="Copy result" aria-label="Copy result" onClick={() => copyText(h.resultText ?? '')}>
+                        <IconCopy />
+                      </button>
+                      <button className="icon-btn sm" title="Remove from history" aria-label="Remove from history" onClick={() => removeHistory(h.id)}>
+                        <IconTrash />
+                      </button>
+                    </div>
+                    <button className={`hist-result${sel === i * 2 + 1 ? ' selected' : ''}`} data-row={i * 2 + 1} title="Insert this result" onClick={() => insertText(h.resultText ?? '')}>
+                      <Tex tex={h.resultTex ?? ''} label={h.resultText} />
+                    </button>
+                  </div>
+                )}
+                {h.approxTex && (
+                  <div className="hist-approx" title="The answer above is exact; this is its decimal value">
+                    <Tex tex={`\\approx ${h.approxTex}`} />
+                  </div>
+                )}
+              </div>
+            ),
+          )}
 
           {/* The entry line is typed straight onto the screen, like a TI-84 */}
-          <div className={`entry${error ? ' has-error' : ''}`}>
+          {run && (
+            <div className="run-status" role="status">
+              <span>
+                {run.paused ? 'Paused — press ENTER' : run.prompt !== null ? `prgm${run.name} is waiting for input` : `Running prgm${run.name}…`}
+              </span>
+              <button className="btn sm danger" onClick={stopProgram} title="Break the program (Esc)">
+                ■ Stop
+              </button>
+            </div>
+          )}
+          <div className={`entry${error ? ' has-error' : ''}${run?.prompt !== null && run ? ' prompting' : ''}`}>
+            {run?.prompt != null && <span className="entry-prompt">{run.prompt}</span>}
             <MathInput
               ref={inputRef}
               value={input}
