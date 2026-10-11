@@ -5,7 +5,7 @@ import { MathInput, type MathInputHandle } from '../components/MathInput';
 import { Tex } from '../components/Tex';
 import { copyText } from '../components/ui';
 import { IconCopy, IconTrash } from '../components/Icons';
-import { calculate, previewTex } from '../math/engine';
+import { calculate } from '../math/engine';
 import { formatValue } from '../math/format';
 import { useEvalContext } from '../state/context';
 import { uid, useStore, type HistoryEntry } from '../state/store';
@@ -42,8 +42,27 @@ export function CalculateView() {
     if (!isTouch) inputRef.current?.focus();
   }, [isTouch]);
 
+  // Undo / redo history for the entry line (UNDO/REDO keys, Ctrl+Z / Ctrl+Shift+Z)
+  const undoStack = useRef<string[]>([]);
+  const redoStack = useRef<string[]>([]);
+  const record = (prev: string, next: string) => {
+    if (prev === next) return;
+    undoStack.current = [...undoStack.current.slice(-99), prev];
+    redoStack.current = [];
+  };
+  const restore = (from: { current: string[] }, to: { current: string[] }) => {
+    const v = from.current.pop();
+    if (v === undefined) return;
+    to.current.push(useStore.getState().input);
+    setInput(v);
+    setError(null);
+    setSel(null);
+    requestAnimationFrame(() => inputRef.current?.apply({ type: 'end' }));
+  };
+
   const onChange = useCallback(
     (v: string) => {
+      record(useStore.getState().input, v);
       setInput(v);
       setError(null);
       setSel(null);
@@ -76,6 +95,7 @@ export function CalculateView() {
       } else if (res.storedTo) {
         setError({ kind: 'DATA TYPE', message: 'Only numbers can be stored in variables' });
       }
+      record(src, '');
       setInput('');
       setError(null);
       setSel(null);
@@ -134,6 +154,9 @@ export function CalculateView() {
     (a: KeyAction, face: KeyFace) => {
       const t = inputRef.current;
       if (!t) return;
+      // Show the caret on the screen once the keypad is used (inputMode="none" keeps the phone keyboard hidden)
+      const el = t.el();
+      if (el && document.activeElement !== el && a.type !== 'nav') el.focus({ preventScroll: true });
       switch (a.type) {
         case 'enter':
           return submit();
@@ -150,7 +173,12 @@ export function CalculateView() {
           return moveSel(a.dir, a.page);
         case 'nav':
           return navigate(a.view, a.intent);
+        case 'undo':
+          return restore(undoStack, redoStack);
+        case 'redo':
+          return restore(redoStack, undoStack);
         case 'quit':
+          record(useStore.getState().input, '');
           setInput('');
           setError(null);
           setSel(null);
@@ -174,6 +202,12 @@ export function CalculateView() {
   );
 
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+      e.preventDefault();
+      if (e.shiftKey) restore(redoStack, undoStack);
+      else restore(undoStack, redoStack);
+      return;
+    }
     if (e.key === 'ArrowUp' || e.key === 'PageUp') {
       e.preventDefault();
       moveSel(-1, e.key === 'PageUp');
@@ -184,6 +218,7 @@ export function CalculateView() {
       e.preventDefault();
       if (sel !== null) setSel(null);
       else {
+        record(input, '');
         setInput('');
         setError(null);
       }
@@ -193,18 +228,6 @@ export function CalculateView() {
     }
   };
 
-  // Live preview of the rendered input and its value
-  const live = useMemo(() => {
-    if (!input.trim()) return null;
-    const tex = previewTex(input);
-    let value: string | null = null;
-    if (tex && !/rand|→|->/i.test(input)) {
-      const r = calculate(input, ctx);
-      if (r.ok) value = formatValue(r.value, fmt).tex;
-    }
-    return { tex, value };
-  }, [input, ctx, fmt]);
-
   const insertText = (text: string) => {
     setSel(null);
     inputRef.current?.apply({ type: 'insert', text });
@@ -213,21 +236,8 @@ export function CalculateView() {
 
   return (
     <div className="calc-layout">
-      <section className="calc-display" aria-label="Calculator display">
-        <div className="history-scroll" ref={scrollRef} role="log" aria-live="polite" aria-label="Calculation history">
-          {history.length === 0 && (
-            <div className="calc-welcome">
-              <div className="calc-welcome-title">Ready when you are.</div>
-              <p className="muted small">Type an expression or use the keypad. Try one of these:</p>
-              <div className="row wrap" style={{ justifyContent: 'center' }}>
-                {['1/3 + 1/6', '√(50)', 'sin(π/6)', '5!/(2!3!)', 'fnInt(x², x, 0, 3)', 'normalcdf(-1, 1)'].map((ex) => (
-                  <button key={ex} className="chip" onClick={() => evaluateInput(ex)}>
-                    {ex}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
+      <section className="calc-display" aria-label="Calculator screen" onClick={() => !isTouch && inputRef.current?.focus()}>
+        <div className="history-scroll" ref={scrollRef} role="log" aria-label="Calculator screen">
           {history.map((h, i) => (
             <div key={h.id} className="hist-entry">
               <button className={`hist-input${sel === i * 2 ? ' selected' : ''}`} data-row={i * 2} title="Reuse this expression" onClick={() => insertText(h.input)}>
@@ -243,61 +253,49 @@ export function CalculateView() {
                   </button>
                 </div>
                 <button className={`hist-result${sel === i * 2 + 1 ? ' selected' : ''}`} data-row={i * 2 + 1} title="Insert this result" onClick={() => insertText(h.resultText ?? '')}>
-                  <span className="hist-eq">=</span>
                   <Tex tex={h.resultTex ?? ''} label={h.resultText} />
                 </button>
               </div>
               {h.approxTex && (
-                <div className="hist-approx">
-                  <span className="badge exact" title="Exact rational result">exact</span>
+                <div className="hist-approx" title="The answer above is exact; this is its decimal value">
                   <Tex tex={`\\approx ${h.approxTex}`} />
                 </div>
               )}
             </div>
           ))}
-        </div>
 
-        <div className={`entry${error ? ' has-error' : ''}`}>
-          {input && (
-            <div className="entry-preview" aria-hidden="true">
-              {live?.tex ? <Tex tex={live.tex} /> : <span className="muted">…</span>}
-              {live?.value && !error && (
-                <span className="entry-live">
-                  <Tex tex={`= ${live.value}`} />
-                </span>
-              )}
-            </div>
-          )}
-          <MathInput
-            ref={inputRef}
-            value={input}
-            onChange={onChange}
-            onSubmit={submit}
-            onKeyDown={onKeyDown}
-            ariaLabel="Expression"
-            className="entry-input"
-            placeholder="Enter an expression"
-            noSystemKeyboard={isTouch && keypadOnly}
-            invalid={!!error}
-            ariaDescribedBy={error ? 'calc-error' : undefined}
-          />
-          {error && (
-            <div className="entry-error" id="calc-error" role="alert">
-              <b>ERR: {error.kind}</b> {error.message}
-              {error.pos !== undefined && input && (
-                <button
-                  className="btn ghost sm"
-                  onClick={() => {
-                    const el = inputRef.current?.el();
-                    el?.focus();
-                    el?.setSelectionRange(error.pos!, Math.min(error.pos! + 1, input.length));
-                  }}
-                >
-                  Go to error
-                </button>
-              )}
-            </div>
-          )}
+          {/* The entry line is typed straight onto the screen, like a TI-84 */}
+          <div className={`entry${error ? ' has-error' : ''}`}>
+            <MathInput
+              ref={inputRef}
+              value={input}
+              onChange={onChange}
+              onSubmit={submit}
+              onKeyDown={onKeyDown}
+              ariaLabel="Expression"
+              className="entry-input"
+              noSystemKeyboard={isTouch && keypadOnly}
+              invalid={!!error}
+              ariaDescribedBy={error ? 'calc-error' : undefined}
+            />
+            {error && (
+              <div className="entry-error" id="calc-error" role="alert">
+                <b>ERR: {error.kind}</b> {error.message}
+                {error.pos !== undefined && input && (
+                  <button
+                    className="btn ghost sm"
+                    onClick={() => {
+                      const el = inputRef.current?.el();
+                      el?.focus();
+                      el?.setSelectionRange(error.pos!, Math.min(error.pos! + 1, input.length));
+                    }}
+                  >
+                    Go to error
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </section>
       <section className="calc-keys">

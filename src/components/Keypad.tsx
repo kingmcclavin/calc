@@ -62,26 +62,25 @@ export const Keypad = memo(function Keypad({ onAction }: Props) {
     const main = showSecond ? k.second!.label : showAlpha ? k.alpha! : k.label;
     const title = showSecond ? k.second!.title : showAlpha ? `Letter ${k.alpha}` : k.title;
     return (
-      <button
-        key={k.id}
-        type="button"
-        className={`key key-${k.variant}${showSecond ? ' showing-second' : ''}${showAlpha ? ' showing-alpha' : ''}`}
-        data-key={k.id}
-        title={title}
-        aria-label={showSecond || showAlpha ? title : k.ariaLabel ?? k.title}
-        aria-pressed={k.id === '2nd' ? second : k.id === 'alpha' ? alpha !== 'off' : undefined}
-        // keep focus in the entry line
-        onPointerDown={(e) => e.preventDefault()}
-        onClick={() => press(k)}
-      >
-        {(k.second || k.alpha) && (
-          <span className="key-labels" aria-hidden="true">
-            <span className="lbl-2nd">{k.second?.label ?? ''}</span>
-            <span className="lbl-alpha">{k.alpha ?? ''}</span>
-          </span>
-        )}
-        <span className="key-main">{main}</span>
-      </button>
+      <div key={k.id} className={`kcell kcell-${k.variant}`} data-cell={k.id}>
+        <span className="klabels" aria-hidden="true">
+          {k.second && <span className="lbl-2nd">{k.second.label}</span>}
+          {k.alpha && <span className="lbl-alpha">{k.alpha}</span>}
+        </span>
+        <button
+          type="button"
+          className={`key key-${k.variant}${showSecond ? ' showing-second' : ''}${showAlpha ? ' showing-alpha' : ''}`}
+          data-key={k.id}
+          title={title}
+          aria-label={showSecond || showAlpha ? title : k.ariaLabel ?? k.title}
+          aria-pressed={k.id === '2nd' ? second : k.id === 'alpha' ? alpha !== 'off' : undefined}
+          // keep focus in the entry line
+          onPointerDown={(e) => e.preventDefault()}
+          onClick={() => press(k)}
+        >
+          <span className="key-main">{main}</span>
+        </button>
+      </div>
     );
   };
 

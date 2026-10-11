@@ -5,8 +5,8 @@ Lumen is a web-based graphing calculator built around the TI-84 Plus CE workflow
 ## Features
 
 **Calculate**
-- Laid out like a TI-84 Plus CE: a scrollable screen on top and the complete keypad below it, with every key (and its amber 2nd and green ALPHA labels) always visible at desktop, iPad and phone sizes.
-- Keys in TI-84 order: Y= / WINDOW / ZOOM / TRACE / GRAPH (with STAT PLOT, TBLSET, FORMAT, CALC, TABLE on 2nd) jump to the matching tool; 2nd, ALPHA (and A-LOCK) for letters A–Z/θ, MODE (angle, Float/Fix, theme; 2nd QUIT), DEL, X,T,θ,n, STAT (2nd LIST), MATH, APPS, SOLVE, VARS (2nd DISTR), CLEAR, arrow pad, STO→, ANS, (−) and ENTER (2nd ENTRY). The TI's PRGM and ON keys are replaced by SOLVE and ANS since programs aren't supported.
+- Laid out like a TI-84 Plus CE: a black, scrollable screen on top — you type straight onto it (no input box), with the entry line right under the previous answers — and the complete keypad below it, pill-shaped keys with cyan 2nd and green ALPHA labels printed above each key, with every key (and its amber 2nd and green ALPHA labels) always visible at desktop, iPad and phone sizes.
+- Keys in TI-84 order: Y= / WINDOW / ZOOM / TRACE / GRAPH (with STAT PLOT, TBLSET, FORMAT, CALC, TABLE on 2nd) jump to the matching tool; 2nd, ALPHA (and A-LOCK) for letters A–Z/θ, MODE (angle, Float/Fix, theme; 2nd QUIT), DEL, X,T,θ,n, STAT (2nd LIST), MATH, APPS, SOLVE, VARS (2nd DISTR), CLEAR, round arrow pad, UNDO/REDO for the entry line (also Ctrl+Z / Ctrl+Shift+Z), STO, ANS, (−) and ENTER (2nd ENTRY). The TI's PRGM and ON keys are replaced by SOLVE and ANS since programs aren't supported.
 - ▲/▼ (on screen or on the keyboard) scroll through the screen and highlight earlier expressions or answers; ENTER pastes the highlighted line into the entry line, exactly like the TI-84 home screen.
 - Works with mouse, touch and a physical keyboard (Enter, Esc, ↑/↓ screen scrolling, typing `+` on an empty line continues from `Ans`, Enter on an empty line repeats the last entry).
 - Live typeset preview (KaTeX) and live result while typing; scrollable history with tap-to-reuse expression or result, copy and delete.
