@@ -216,6 +216,35 @@ export function GraphView() {
     setPane('graph');
   };
 
+  // Keys pressed on the calculator keypad (Y=, WINDOW, ZOOM, TRACE, 2nd CALC, GRAPH)
+  const intent = useStore((s) => s.intent);
+  const clearIntent = useStore((s) => s.clearIntent);
+  useEffect(() => {
+    if (!intent) return;
+    clearIntent();
+    const w = useStore.getState().window;
+    switch (intent) {
+      case 'equations':
+        setPane('list');
+        break;
+      case 'window':
+      case 'zoom':
+        setPane('graph');
+        setShowWindow(true);
+        break;
+      case 'trace':
+        setPane('graph');
+        if (curves[0]) setTrace({ curveId: curves[0].id, x: (w.xMin + w.xMax) / 2 });
+        break;
+      case 'calc':
+        startTool('zero');
+        break;
+      default:
+        setPane('graph');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [intent]);
+
   const points: PlotPoint[] = useMemo(() => {
     if (!tool || !analysis.out || !fA) return [];
     const color = fA.fn.color;

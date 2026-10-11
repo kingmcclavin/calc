@@ -103,7 +103,7 @@ export function App() {
         {NAV.slice(5).map(navButton)}
       </nav>
 
-      <div className="main">
+      <div className={`main${view === 'calc' ? ' calc-mode' : ''}`}>
         <header className="topbar">
           <div>
             <h1>{current.label === 'Calculate' ? 'Lumen' : current.label}</h1>

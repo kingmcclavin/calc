@@ -27,7 +27,9 @@ export function CalculateView() {
   const inputRef = useRef<MathInputHandle>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<{ kind: string; message: string; pos?: number } | null>(null);
-  const [histIdx, setHistIdx] = useState<number | null>(null);
+  /** Highlighted screen line (TI-style ▲/▼ scrolling): 2·i = entry i's expression, 2·i+1 = its answer */
+  const [sel, setSel] = useState<number | null>(null);
+  const navigate = useStore((s) => s.navigate);
   const isTouch = useMemo(() => typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches, []);
 
   // Scroll to newest entry
@@ -44,7 +46,7 @@ export function CalculateView() {
     (v: string) => {
       setInput(v);
       setError(null);
-      setHistIdx(null);
+      setSel(null);
     },
     [setInput],
   );
@@ -76,12 +78,24 @@ export function CalculateView() {
       }
       setInput('');
       setError(null);
-      setHistIdx(null);
+      setSel(null);
     },
     [ctx, fmt, addHistory, setVar, setInput],
   );
 
+  const lineText = (row: number) => {
+    const h = useStore.getState().history[row >> 1];
+    if (!h) return '';
+    return row % 2 === 0 ? h.input : h.resultText ?? '';
+  };
+
   const submit = useCallback(() => {
+    if (sel !== null) {
+      // ENTER on a highlighted line pastes it into the entry line, like the TI-84
+      inputRef.current?.apply({ type: 'insert', text: lineText(sel) });
+      setSel(null);
+      return;
+    }
     const src = useStore.getState().input;
     if (!src.trim()) {
       // Enter on an empty line repeats the last entry (handy for Ans+1 iterations)
@@ -90,29 +104,65 @@ export function CalculateView() {
       return;
     }
     evaluateInput(src);
-  }, [evaluateInput]);
+  }, [evaluateInput, sel]);
 
-  const recall = useCallback(
-    (dir: -1 | 1) => {
-      const h = useStore.getState().history;
-      if (!h.length) return;
-      let idx = histIdx === null ? (dir === -1 ? h.length - 1 : null) : histIdx + dir;
-      if (idx !== null && idx >= h.length) idx = null;
-      if (idx !== null && idx < 0) idx = 0;
-      setHistIdx(idx);
-      setInput(idx === null ? '' : h[idx].input);
-      inputRef.current?.apply({ type: 'end' });
-    },
-    [histIdx, setInput],
-  );
+  /** ▲/▼: move the highlight through the screen's lines. */
+  const moveSel = useCallback((dir: -1 | 1, page = false) => {
+    const rows = useStore.getState().history.length * 2;
+    if (!rows) return;
+    const step = page ? 6 : 1;
+    setSel((cur) => {
+      if (cur === null) return dir === -1 ? Math.max(0, rows - step) : null;
+      const next = cur + dir * step;
+      if (next >= rows) return null;
+      return Math.max(0, next);
+    });
+  }, []);
+
+  // Keep the highlighted line visible; return to the bottom when the highlight clears
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    if (sel === null) {
+      el.scrollTop = el.scrollHeight;
+      return;
+    }
+    el.querySelector(`[data-row="${sel}"]`)?.scrollIntoView({ block: 'nearest' });
+  }, [sel]);
 
   const onAction = useCallback(
     (a: KeyAction, face: KeyFace) => {
       const t = inputRef.current;
       if (!t) return;
-      if (a.type === 'enter') return submit();
-      if (a.type === 'entry') return recall(-1);
-      if (a.type === 'none' || a.type === 'second' || a.type === 'angle' || a.type === 'menu') return;
+      switch (a.type) {
+        case 'enter':
+          return submit();
+        case 'entry': {
+          const last = useStore.getState().history.at(-1);
+          if (last) {
+            setInput(last.input);
+            setSel(null);
+            requestAnimationFrame(() => inputRef.current?.apply({ type: 'end' }));
+          }
+          return;
+        }
+        case 'scroll':
+          return moveSel(a.dir, a.page);
+        case 'nav':
+          return navigate(a.view, a.intent);
+        case 'quit':
+          setInput('');
+          setError(null);
+          setSel(null);
+          return;
+        case 'none':
+        case 'second':
+        case 'alpha':
+        case 'alphaLock':
+        case 'menu':
+          return;
+      }
+      setSel(null);
       if (a.type === 'insert' && face.binaryOp && !useStore.getState().input && useStore.getState().vars.Ans) {
         t.apply({ type: 'insert', text: `Ans${a.text.trimStart()}` });
         return;
@@ -120,20 +170,23 @@ export function CalculateView() {
       if (a.type === 'clear') setError(null);
       t.apply(a);
     },
-    [submit, recall],
+    [submit, moveSel, navigate, setInput],
   );
 
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'ArrowUp') {
+    if (e.key === 'ArrowUp' || e.key === 'PageUp') {
       e.preventDefault();
-      recall(-1);
-    } else if (e.key === 'ArrowDown') {
+      moveSel(-1, e.key === 'PageUp');
+    } else if (e.key === 'ArrowDown' || e.key === 'PageDown') {
       e.preventDefault();
-      recall(1);
+      moveSel(1, e.key === 'PageDown');
     } else if (e.key === 'Escape') {
       e.preventDefault();
-      setInput('');
-      setError(null);
+      if (sel !== null) setSel(null);
+      else {
+        setInput('');
+        setError(null);
+      }
     } else if (OPERATOR_KEYS.has(e.key) && !input && hasAns && !e.ctrlKey && !e.metaKey) {
       e.preventDefault();
       inputRef.current?.apply({ type: 'insert', text: `Ans${e.key}` });
@@ -153,6 +206,7 @@ export function CalculateView() {
   }, [input, ctx, fmt]);
 
   const insertText = (text: string) => {
+    setSel(null);
     inputRef.current?.apply({ type: 'insert', text });
     if (!isTouch) inputRef.current?.focus();
   };
@@ -174,9 +228,9 @@ export function CalculateView() {
               </div>
             </div>
           )}
-          {history.map((h) => (
+          {history.map((h, i) => (
             <div key={h.id} className="hist-entry">
-              <button className="hist-input" title="Reuse this expression" onClick={() => insertText(h.input)}>
+              <button className={`hist-input${sel === i * 2 ? ' selected' : ''}`} data-row={i * 2} title="Reuse this expression" onClick={() => insertText(h.input)}>
                 <Tex tex={h.inputTex} label={h.input} />
               </button>
               <div className="hist-result-row">
@@ -188,7 +242,7 @@ export function CalculateView() {
                     <IconTrash />
                   </button>
                 </div>
-                <button className="hist-result" title="Insert this result" onClick={() => insertText(h.resultText ?? '')}>
+                <button className={`hist-result${sel === i * 2 + 1 ? ' selected' : ''}`} data-row={i * 2 + 1} title="Insert this result" onClick={() => insertText(h.resultText ?? '')}>
                   <span className="hist-eq">=</span>
                   <Tex tex={h.resultTex ?? ''} label={h.resultText} />
                 </button>
@@ -204,14 +258,16 @@ export function CalculateView() {
         </div>
 
         <div className={`entry${error ? ' has-error' : ''}`}>
-          <div className="entry-preview" aria-hidden="true">
-            {live?.tex ? <Tex tex={live.tex} /> : <span className="muted">{input ? '…' : ' '}</span>}
-            {live?.value && !error && (
-              <span className="entry-live">
-                <Tex tex={`= ${live.value}`} />
-              </span>
-            )}
-          </div>
+          {input && (
+            <div className="entry-preview" aria-hidden="true">
+              {live?.tex ? <Tex tex={live.tex} /> : <span className="muted">…</span>}
+              {live?.value && !error && (
+                <span className="entry-live">
+                  <Tex tex={`= ${live.value}`} />
+                </span>
+              )}
+            </div>
+          )}
           <MathInput
             ref={inputRef}
             value={input}

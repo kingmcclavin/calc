@@ -5,8 +5,10 @@ Lumen is a web-based graphing calculator built around the TI-84 Plus CE workflow
 ## Features
 
 **Calculate**
-- Full on-screen keypad with a 2nd layer (inverse trig, eˣ, 10ˣ, roots, |x|, !, nPr/nCr, STO→, ANS, ENTRY, ᴇ), MATH and VARS menus, cursor keys, DEL/CLEAR.
-- Works with mouse, touch and a physical keyboard (Enter, Esc, ↑/↓ history recall, typing `+` on an empty line continues from `Ans`, Enter on an empty line repeats the last entry).
+- Laid out like a TI-84 Plus CE: a scrollable screen on top and the complete keypad below it, with every key (and its amber 2nd and green ALPHA labels) always visible at desktop, iPad and phone sizes.
+- Keys in TI-84 order: Y= / WINDOW / ZOOM / TRACE / GRAPH (with STAT PLOT, TBLSET, FORMAT, CALC, TABLE on 2nd) jump to the matching tool; 2nd, ALPHA (and A-LOCK) for letters A–Z/θ, MODE (angle, Float/Fix, theme; 2nd QUIT), DEL, X,T,θ,n, STAT (2nd LIST), MATH, APPS, SOLVE, VARS (2nd DISTR), CLEAR, arrow pad, STO→, ANS, (−) and ENTER (2nd ENTRY). The TI's PRGM and ON keys are replaced by SOLVE and ANS since programs aren't supported.
+- ▲/▼ (on screen or on the keyboard) scroll through the screen and highlight earlier expressions or answers; ENTER pastes the highlighted line into the entry line, exactly like the TI-84 home screen.
+- Works with mouse, touch and a physical keyboard (Enter, Esc, ↑/↓ screen scrolling, typing `+` on an empty line continues from `Ans`, Enter on an empty line repeats the last entry).
 - Live typeset preview (KaTeX) and live result while typing; scrollable history with tap-to-reuse expression or result, copy and delete.
 - **Exact results** for rational arithmetic using BigInt fractions (`1/3+1/6 = 1/2`, `0.1+0.2 = 3/10`, `20!`, `√(9/4) = 3/2`, `sin(30) = 1/2` in degree mode), shown with the decimal approximation. Anything irrational is shown as a decimal and never labelled exact.
 - Functions: trig/inverse/hyperbolic, sec/csc/cot, ln, log (any base), roots, abs, floor/ceil/round, iPart/fPart, mod, gcd/lcm, min/max, Γ, factorial, nPr/nCr, rand/randInt, `nDeriv`, `fnInt`, `sum`/`prod` (Σ/Π), list statistics, and normal/binomial/Poisson distributions.
@@ -84,7 +86,7 @@ Layers are independent: parsing, numerical evaluation, graph sampling and UI ren
 
 `npm test` runs 55 unit tests covering operator precedence, negative numbers and implicit multiplication, exact fractions, degree/radian behaviour, domain/overflow/syntax errors, special functions and distributions against reference values, roots/extrema/intersections/derivatives/integrals against known answers, discontinuity handling in the sampler, the solver (linear, quadratic, surds, complex, cubic, transcendental, systems), statistics/regressions and the entry-line editing logic.
 
-During development the production build was also exercised in headless Chromium at desktop (1440×900), iPad Pro 11″ and iPhone 14 sizes: keypad and keyboard entry, Ans chaining, history recall, variable storage, degree mode, persistence across reloads, click-to-trace, keyboard trace, wheel zoom, drag pan, pinch zoom (synthetic touch pointers), zeros/intersections/integral/tangent tools, table → graph navigation, the solver, regression plots and the light theme.
+During development the production build was also exercised in headless Chromium at desktop (1440×900), iPad Pro 11″ and iPhone 14 sizes: keypad and keyboard entry (including a check that all 50 keys fit on screen at 1440×900, 390×664 and 320×568 without scrolling), ▲/▼ screen highlighting and ENTER paste, ALPHA letters, 2nd functions, Y=/WINDOW/TRACE/CALC/STAT PLOT navigation, Ans chaining, variable storage, degree mode, persistence across reloads, click-to-trace, keyboard trace, wheel zoom, drag pan, pinch zoom (synthetic touch pointers), zeros/intersections/integral/tangent tools, table → graph navigation, the solver, regression plots and the light theme.
 
 ## Limitations and known issues
 

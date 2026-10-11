@@ -5,6 +5,8 @@ import type { FormatOptions } from '../math/format';
 
 export type ViewId = 'calc' | 'graph' | 'table' | 'stats' | 'solver' | 'history' | 'settings';
 export type ThemePref = 'dark' | 'light' | 'system';
+/** What a TI-style key (Y=, WINDOW, ZOOM, TRACE, CALC, STAT PLOT) asks the target view to open. */
+export type GraphIntent = 'equations' | 'window' | 'zoom' | 'trace' | 'calc' | 'graph' | 'plot';
 
 export interface Settings {
   theme: ThemePref;
@@ -116,10 +118,13 @@ export interface AppState {
   lists: Record<ListName, number[]>;
   // Cross-view requests (not persisted)
   traceRequest: { fnId: string; x: number } | null;
+  intent: GraphIntent | null;
   undoStack: Snapshot[];
   redoStack: Snapshot[];
 
   setView: (v: ViewId) => void;
+  navigate: (v: ViewId, intent?: GraphIntent) => void;
+  clearIntent: () => void;
   updateSettings: (p: Partial<Settings>) => void;
   setInput: (s: string) => void;
   addHistory: (e: HistoryEntry) => void;
@@ -219,10 +224,13 @@ export const useStore = create<AppState>()(
       return {
         ...initialData(),
         traceRequest: null,
+        intent: null,
         undoStack: [],
         redoStack: [],
 
         setView: (view) => set({ view }),
+        navigate: (view, intent) => set({ view, intent: intent ?? null }),
+        clearIntent: () => set({ intent: null }),
         updateSettings: (p) => set((s) => ({ settings: { ...s.settings, ...p } })),
         setInput: (input) => set({ input }),
         addHistory: (e) => set((s) => ({ history: [...s.history, e].slice(-MAX_HISTORY) })),

@@ -50,6 +50,7 @@
   --key-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 1px 2px rgba(0, 0, 0, 0.35);
   --shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
   --graph-bg: #0d1118;
+  --screen-bg: #0d1219;
   --graph-grid: rgba(150, 165, 200, 0.08);
   --graph-grid-major: rgba(150, 165, 200, 0.16);
   --graph-axis: rgba(220, 228, 245, 0.55);
@@ -88,6 +89,7 @@
   --key-shadow: 0 1px 0 rgba(255, 255, 255, 0.9) inset, 0 1px 2px rgba(20, 30, 60, 0.12);
   --shadow: 0 12px 32px rgba(20, 30, 60, 0.14);
   --graph-bg: #ffffff;
+  --screen-bg: #fbfcfe;
   --graph-grid: rgba(30, 40, 70, 0.06);
   --graph-grid-major: rgba(30, 40, 70, 0.12);
   --graph-axis: rgba(20, 24, 36, 0.6);

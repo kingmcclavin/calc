@@ -1,12 +1,16 @@
 /* ==========================================================================
-   Calculate view
+   Calculate view — a TI-84-style device: scrollable screen above a keypad
+   whose keys are always fully visible
    ========================================================================== */
 .calc-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(360px, 440px);
-  gap: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   height: 100%;
-  padding: 16px;
+  width: 100%;
+  max-width: 540px;
+  margin: 0 auto;
+  padding: 12px 12px 14px;
 }
 .calc-display {
   display: flex;
@@ -41,7 +45,7 @@
   margin: 0 0 6px;
 }
 .hist-entry {
-  padding: 6px 8px 8px;
+  padding: 2px 6px 4px;
   border-radius: var(--radius);
   border-bottom: 1px solid var(--border);
 }
@@ -108,7 +112,11 @@
 }
 @media (hover: none) {
   .hist-actions {
-    opacity: 0.6;
+    display: none;
+  }
+  .hist-entry:has(.selected) .hist-actions {
+    display: flex;
+    opacity: 1;
   }
 }
 
@@ -170,20 +178,68 @@
   letter-spacing: 0.04em;
 }
 
+
+/* The screen */
+.calc-display {
+  flex: 1 1 auto;
+  min-height: 130px;
+  border: 2px solid var(--border-strong);
+  box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.18), 0 0 0 5px var(--surface-2);
+  border-radius: 14px;
+  background: var(--screen-bg, var(--surface));
+}
+.hist-input.selected,
+.hist-result.selected {
+  background: var(--accent);
+  color: var(--accent-text);
+  outline: none;
+}
+.hist-input.selected .katex,
+.hist-result.selected .katex,
+.hist-result.selected .hist-eq {
+  color: var(--accent-text);
+}
+.calc-welcome {
+  padding: 22px 12px;
+}
+
 /* Keypad */
 .calc-keys {
+  flex: 0 0 auto;
+  height: clamp(340px, 64%, 640px);
   display: flex;
   flex-direction: column;
+  gap: 6px;
   min-height: 0;
 }
-.keypad {
+.keypad-status {
+  order: -1;
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+  min-height: 18px;
+  padding: 0 4px;
+}
+.ind {
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  color: var(--text-3);
+  font-family: var(--font-mono);
+}
+.ind-2nd {
+  color: var(--second);
+}
+.ind-alpha {
+  color: var(--success);
+}
+.keypad.ti {
   flex: 1;
+  min-height: 0;
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  grid-auto-rows: minmax(0, 1fr);
-  gap: 7px;
-  min-height: 0;
-  max-height: 640px;
+  grid-template-rows: repeat(10, minmax(0, 1fr));
+  gap: 6px 7px;
 }
 .key {
   position: relative;
@@ -191,31 +247,33 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-height: 40px;
+  min-height: 0;
+  min-width: 0;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 10px;
   background: var(--key-fn);
   box-shadow: var(--key-shadow);
   color: var(--text);
-  font-weight: 560;
-  font-size: 15px;
+  font-weight: 600;
+  font-size: 14px;
   user-select: none;
   -webkit-user-select: none;
   touch-action: manipulation;
   transition: background 0.12s, transform 0.06s, border-color 0.12s;
   padding: 0 2px;
   overflow: hidden;
+  white-space: nowrap;
 }
 .key:hover {
   background: var(--key-fn-hover);
 }
 .key:active {
-  transform: scale(0.96);
+  transform: scale(0.95);
 }
 .key-num {
   background: var(--key-num);
-  font-size: 19px;
-  font-weight: 520;
+  font-size: 18px;
+  font-weight: 540;
 }
 .key-num:hover {
   background: var(--key-num-hover);
@@ -223,132 +281,202 @@
 .key-op {
   background: var(--key-op);
   color: var(--accent);
-  font-size: 21px;
+  font-size: 20px;
 }
 .key-op:hover {
   background: var(--key-op-hover);
 }
-.key-mod {
-  font-size: 12.5px;
+.key-mod,
+.key-clear,
+.key-top {
+  font-size: 11.5px;
   font-weight: 700;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.03em;
   color: var(--text-2);
 }
 .key-clear {
-  font-size: 12.5px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
   color: var(--danger);
+}
+.key-top {
+  border-radius: 999px;
+  font-size: 11px;
+  background: var(--surface-3);
 }
 .key-shift {
   background: var(--second-soft);
   color: var(--second);
   font-size: 13px;
   font-weight: 750;
-  letter-spacing: 0.04em;
   border-color: transparent;
 }
 .key.key-shift[aria-pressed='true'] {
   background: var(--second);
   color: #1a1204;
 }
+.key-alpha {
+  background: var(--success-soft);
+  color: var(--success);
+  font-size: 11.5px;
+  font-weight: 750;
+  border-color: transparent;
+}
+.key.key-alpha[aria-pressed='true'] {
+  background: var(--success);
+  color: #04140c;
+}
 .key-enter {
   background: var(--accent);
   color: var(--accent-text);
   border-color: transparent;
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 750;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.05em;
 }
 .key-enter:hover {
   background: var(--accent-strong);
 }
-.key .key-second {
+.key-labels {
   position: absolute;
-  top: 3px;
-  left: 0;
-  right: 0;
-  background: transparent;
-  font-size: 9.5px;
+  top: 2px;
+  left: 5px;
+  right: 5px;
+  display: flex;
+  justify-content: space-between;
+  gap: 2px;
+  font-size: 9px;
   font-weight: 650;
-  letter-spacing: 0.02em;
-  line-height: 1;
-  opacity: 0.85;
+  line-height: 1.1;
   pointer-events: none;
 }
-.key-enter .key-second {
-  color: color-mix(in srgb, var(--accent-text) 75%, transparent);
+.lbl-2nd {
+  color: var(--second);
+  overflow: hidden;
+  text-overflow: clip;
+}
+.lbl-alpha {
+  color: var(--success);
+}
+.key-enter .lbl-2nd {
+  color: color-mix(in srgb, var(--accent-text) 80%, transparent);
 }
 .key .key-main {
   line-height: 1;
-  margin-top: 6px;
 }
-.key:not(:has(.key-second)) .key-main {
-  margin-top: 0;
+.key:has(.key-labels) .key-main {
+  margin-top: 8px;
 }
-.second-on .key.showing-second {
-  border-color: color-mix(in srgb, var(--second) 55%, transparent);
+.second-on .key.showing-second,
+.alpha-on .key.showing-alpha {
+  border-color: color-mix(in srgb, var(--second) 60%, transparent);
   color: var(--second);
 }
-.second-on .key.showing-second .key-second {
-  opacity: 0;
+.alpha-on .key.showing-alpha {
+  border-color: color-mix(in srgb, var(--success) 60%, transparent);
+  color: var(--success);
 }
-.second-on .key.showing-second .key-main {
+.second-on .key.showing-second .key-labels,
+.alpha-on .key.showing-alpha .key-labels {
+  visibility: hidden;
+}
+.second-on .key.showing-second .key-main,
+.alpha-on .key.showing-alpha .key-main {
   margin-top: 0;
-  font-size: 15px;
+  font-size: 14px;
 }
 
-@media (max-width: 1099px) {
-  .calc-layout {
-    grid-template-columns: 1fr;
-    grid-template-rows: minmax(150px, 1fr) auto;
-    padding: 12px;
-    gap: 10px;
-  }
-  .calc-keys {
-    height: min(56dvh, 480px);
-  }
-  .keypad {
-    max-width: 640px;
-    margin: 0 auto;
-    width: 100%;
-  }
+/* Arrow pad: right two columns of rows 2–3 */
+.dpad {
+  grid-column: 4 / span 2;
+  grid-row: 2 / span 2;
+  display: grid;
+  grid-template-columns: 1fr 1.1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  grid-template-areas: 'left up right' 'left down right';
+  gap: 4px;
+  padding: 3px;
+  border-radius: 18px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  min-height: 0;
 }
+.dpad-btn {
+  border: 1px solid var(--border);
+  background: var(--key-fn);
+  box-shadow: var(--key-shadow);
+  color: var(--text-2);
+  font-size: 13px;
+  border-radius: 10px;
+  min-height: 0;
+  touch-action: manipulation;
+}
+.dpad-btn:hover {
+  background: var(--key-fn-hover);
+  color: var(--text);
+}
+.dpad-btn:active {
+  transform: scale(0.94);
+}
+.dpad-up {
+  grid-area: up;
+}
+.dpad-down {
+  grid-area: down;
+}
+.dpad-left {
+  grid-area: left;
+  border-radius: 14px 8px 8px 14px;
+}
+.dpad-right {
+  grid-area: right;
+  border-radius: 8px 14px 14px 8px;
+}
+
 @media (max-width: 899px) {
+  /* On phones the calculator gets the whole screen, like the real device */
+  .main.calc-mode .topbar {
+    display: none;
+  }
   .calc-layout {
-    padding: 8px 8px 8px;
-    gap: 8px;
+    padding: calc(8px + var(--safe-t)) 8px 8px;
+    gap: 6px;
+  }
+  .calc-display {
+    min-height: 110px;
   }
   .calc-keys {
-    height: min(57dvh, 470px);
+    height: clamp(300px, 72%, 580px);
+    gap: 4px;
   }
-  .keypad {
+  .keypad.ti {
     gap: 5px;
   }
   .key {
-    border-radius: 10px;
-    min-height: 32px;
+    border-radius: 9px;
   }
   .entry {
     padding: 6px 10px 10px;
   }
   .entry-input {
-    height: 44px;
+    height: 42px;
     font-size: 17px;
   }
   .hist-result {
     font-size: 1.12em;
   }
 }
-@media (max-height: 700px) and (max-width: 899px) {
-  .calc-keys {
-    height: 54dvh;
+@media (max-height: 720px) {
+  .key-labels {
+    font-size: 8px;
+    top: 1px;
+  }
+  .key:has(.key-labels) .key-main {
+    margin-top: 6px;
+  }
+  .key-num {
+    font-size: 16px;
   }
   .entry-preview {
-    min-height: 26px;
-  }
-  .key .key-second {
-    font-size: 8.5px;
+    min-height: 24px;
   }
 }
 
@@ -930,4 +1058,15 @@
 .mini-graph .graph-canvas-wrap {
   position: absolute;
   inset: 0;
+}
+.second-on .key-enter.showing-second {
+  color: var(--accent-text);
+}
+@media (min-width: 900px) {
+  .calc-layout {
+    max-width: 600px;
+  }
+  .calc-keys {
+    height: clamp(360px, 60%, 600px);
+  }
 }

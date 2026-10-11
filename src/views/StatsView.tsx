@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { GraphCanvas, type PlotCurve } from '../graph/GraphCanvas';
 import { Tex } from '../components/Tex';
 import { Dialog, toast } from '../components/ui';
@@ -12,7 +12,9 @@ import { LIST_NAMES, PALETTE, useStore, type GraphWindow, type ListName } from '
 type Tab = 'one' | 'two' | 'dist';
 
 export function StatsView() {
-  const [tab, setTab] = useState<Tab>('one');
+  const [tab, setTab] = useState<Tab>(() => (useStore.getState().intent === 'plot' ? 'two' : 'one'));
+  const clearIntent = useStore((s) => s.clearIntent);
+  useEffect(() => clearIntent(), [clearIntent]);
   return (
     <div className="page">
       <ListEditor />

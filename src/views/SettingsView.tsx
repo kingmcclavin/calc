@@ -20,7 +20,7 @@ function Row({ title, desc, children }: { title: string; desc?: string; children
 
 const SHORTCUTS: Array<[string, string]> = [
   ['Enter', 'Evaluate the expression (on an empty line: repeat the last entry)'],
-  ['↑ / ↓', 'Recall previous / next entries in the calculator'],
+  ['↑ / ↓', 'Scroll through the calculator screen; Enter pastes the highlighted line (PgUp/PgDn jump)'],
   ['Esc', 'Clear the entry line'],
   ['+ − * / ^', 'On an empty line, continue from the previous answer (Ans)'],
   ['->', 'Typed as →, store: 5->A'],
