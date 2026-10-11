@@ -157,11 +157,10 @@ button {
    ========================================================================== */
 .app {
   /* Fixed to the viewport so mobile browsers never scroll or offset the whole page */
+  /* Exactly the area the browser lets us draw in. (On iOS Home-Screen apps that can end
+     above the physical bottom of the screen; the page background is black there.) */
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: var(--app-h, 100dvh);
+  inset: 0;
   display: grid;
   grid-template-columns: var(--nav-w) 1fr;
   overflow: hidden;
