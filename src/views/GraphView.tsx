@@ -28,7 +28,11 @@ const EXAMPLES: Array<{ name: string; exprs: string[]; window?: GraphWindow }> =
   { name: 'Normal curve', exprs: ['normalpdf(x,0,1)'], window: { xMin: -4, xMax: 4, yMin: -0.1, yMax: 0.5, xScl: 1, yScl: 0.1 } },
 ];
 
-export function GraphView() {
+/**
+ * Two TI-84 screens share this component: Y= (the equation editor, `screen="equations"`)
+ * and GRAPH (only the graph, `screen="graph"`). They are opened with the Y= and GRAPH keys.
+ */
+export function GraphView({ screen }: { screen: 'equations' | 'graph' }) {
   const graphWindow = useStore((s) => s.window);
   const setWindow = useStore((s) => s.setWindow);
   const settings = useStore((s) => s.settings);
@@ -38,7 +42,12 @@ export function GraphView() {
   const redo = useStore((s) => s.redo);
   const { ctx, parsed } = useParsedFunctions();
 
-  const [pane, setPane] = useState<'list' | 'graph'>('graph');
+  const navigate = useStore((s) => s.navigate);
+  const pane = screen === 'equations' ? 'list' : 'graph';
+  const setPane = (p: 'list' | 'graph') => {
+    if (p === 'list' && screen !== 'equations') navigate('yeq');
+    if (p === 'graph' && screen !== 'graph') navigate('graph');
+  };
   const [trace, setTrace] = useState<TraceState | null>(null);
   const [showWindow, setShowWindow] = useState(false);
   const [showSave, setShowSave] = useState(false);
@@ -298,45 +307,25 @@ export function GraphView() {
 
   return (
     <div className="graph-layout" data-pane={pane}>
-      <div className="mobile-switch">
-        <div className="segmented" role="group" aria-label="Graph panes">
-          <button aria-pressed={pane === 'list'} onClick={() => setPane('list')}>
-            Equations
-          </button>
-          <button aria-pressed={pane === 'graph'} onClick={() => setPane('graph')}>
-            Graph
-          </button>
-        </div>
-      </div>
-
+      {screen === 'equations' && (
       <aside className="graph-side" aria-label="Function editor">
         <div className="graph-side-scroll">
-          <FunctionList parsed={parsed} onTrace={(id) => { setTrace({ curveId: id, x: trace?.x ?? (graphWindow.xMin + graphWindow.xMax) / 2 }); setPane('graph'); }} />
+          <FunctionList parsed={parsed} onTrace={(id) => useStore.getState().requestTrace(id, (graphWindow.xMin + graphWindow.xMax) / 2)} />
           <div className="row wrap" style={{ marginTop: 12, gap: 6 }}>
             <ExamplesButton />
             <button className="btn sm" onClick={() => setShowSave(true)} title="Save these functions and window">
               <IconSave width={15} height={15} /> Save graph
             </button>
           </div>
-          <div className="card" style={{ marginTop: 14 }}>
-            <div className="card-head">
-              <h3>Analyze</h3>
-              <span className="muted small">numerical tools</span>
-            </div>
-            <div className="card-body">
-              <div className="row wrap" style={{ gap: 6 }}>
-                {TOOLS.map((t) => (
-                  <button key={t.id} className={`chip${tool === t.id ? ' on' : ''}`} title={t.description} onClick={() => (tool === t.id ? setTool(null) : startTool(t.id))}>
-                    {t.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
+          <p className="muted small" style={{ marginTop: 14 }}>
+            Press <b>GRAPH</b> to see the graph, <b>TRACE</b> to trace it and <b>2nd TRACE</b> (CALC) for zeros, min/max, intersections, dy/dx and ∫.
+          </p>
         </div>
         <SymbolBar />
       </aside>
+      )}
 
+      {screen === 'graph' && (
       <section className="graph-main" aria-label="Graph">
         <GraphCanvas
           window={graphWindow}
@@ -432,6 +421,7 @@ export function GraphView() {
           </div>
         )}
       </section>
+      )}
 
       {showWindow && <WindowDialog onClose={() => setShowWindow(false)} onPreset={applyPreset} />}
       {showSave && <SaveDialog onClose={() => setShowSave(false)} />}

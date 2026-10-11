@@ -17,7 +17,8 @@ Lumen is a web-based graphing calculator built around the TI-84 Plus CE workflow
 - Variables A–Z and θ (`5→A`), `Ans`, lists `L1–L6`, list literals `{1,2,3}` with element-wise arithmetic, and graph functions `Y1(3)`.
 - Clear TI-style error messages (`ERR: DOMAIN`, `DIVIDE BY 0`, `NONREAL`, `SYNTAX` …) with a "Go to error" jump.
 
-**Graph**
+**Graph** (Y= and GRAPH keys)
+- As on a TI-84, **Y=** opens the equation editor and **GRAPH** shows only the graph, full screen; WINDOW/ZOOM, TRACE and 2nd TRACE (CALC) work from either.
 - Up to 10 functions with individual colors (palette or custom), show/hide, reorder, delete, undo/redo, live syntax-error indicators and typeset previews. Implicit multiplication (`2x`, `3(x+1)`, `2sin(x)`) and `Y1`-references (e.g. `nDeriv(Y1,x,x)` graphs a derivative).
 - Canvas renderer with adaptive sampling that breaks curves at poles, jumps and domain edges (tan, 1/x, floor, √x) instead of drawing false connecting lines.
 - Pan by dragging, zoom with the wheel/trackpad or pinch, zoom buttons, keyboard navigation; grid, axes, ticks and labels (toggleable).

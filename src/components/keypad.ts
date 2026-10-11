@@ -44,7 +44,7 @@ const fn = (text: string) => ins(text, { wrap: true });
  */
 export const KEYS: KeyDef[] = [
   // Graphing row
-  { id: 'yeq', label: 'Y=', variant: 'top', action: { type: 'nav', view: 'graph', intent: 'equations' }, title: 'Edit graph functions (Y= editor)', second: { label: 'STAT PLOT', action: { type: 'nav', view: 'stats', intent: 'plot' }, title: 'Scatter plots & regression' } },
+  { id: 'yeq', label: 'Y=', variant: 'top', action: { type: 'nav', view: 'yeq' }, title: 'Edit graph functions (Y= editor)', second: { label: 'STAT PLOT', action: { type: 'nav', view: 'stats', intent: 'plot' }, title: 'Scatter plots & regression' } },
   { id: 'window', label: 'WINDOW', variant: 'top', action: { type: 'nav', view: 'graph', intent: 'window' }, title: 'Graph window settings', second: { label: 'TBLSET', action: { type: 'nav', view: 'table' }, title: 'Table setup' } },
   { id: 'zoom', label: 'ZOOM', variant: 'top', action: { type: 'nav', view: 'graph', intent: 'zoom' }, title: 'Zoom presets', second: { label: 'FORMAT', action: { type: 'nav', view: 'settings' }, title: 'Display format & settings' } },
   { id: 'trace', label: 'TRACE', variant: 'top', action: { type: 'nav', view: 'graph', intent: 'trace' }, title: 'Trace along a graph', second: { label: 'CALC', action: { type: 'nav', view: 'graph', intent: 'calc' }, title: 'Graph analysis: zeros, min/max, intersect, dy/dx, ∫' } },

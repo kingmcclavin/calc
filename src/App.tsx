@@ -1,6 +1,6 @@
 import { useEffect, type ComponentType, type SVGProps } from 'react';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { IconCalc, IconGraph, IconHistory, IconMoon, IconSettings, IconProgram, IconSolver, IconStats, IconSun, IconTable } from './components/Icons';
+import { IconCalc, IconHistory, IconMoon, IconSettings, IconProgram, IconSolver, IconStats, IconSun, IconTable } from './components/Icons';
 import { ToastHost } from './components/ui';
 import { DeviceKeypad } from './components/DeviceKeypad';
 import { useStore, type ViewId } from './state/store';
@@ -23,18 +23,18 @@ interface NavItem {
 
 const NAV: NavItem[] = [
   { id: 'calc', label: 'Calculate', title: 'Scientific calculator', icon: IconCalc, shortcut: '1' },
-  { id: 'graph', label: 'Graph', title: 'Functions & graph', icon: IconGraph, shortcut: '2' },
-  { id: 'table', label: 'Table', title: 'Function table', icon: IconTable, shortcut: '3' },
-  { id: 'stats', label: 'Stats', title: 'Statistics', icon: IconStats, shortcut: '4' },
-  { id: 'solver', label: 'Solver', title: 'Equation solver', icon: IconSolver, shortcut: '5' },
-  { id: 'programs', label: 'Programs', title: 'Write and run programs', icon: IconProgram, shortcut: '6' },
-  { id: 'history', label: 'History', title: 'History & saved graphs', icon: IconHistory, shortcut: '7' },
-  { id: 'settings', label: 'Settings', title: 'Settings', icon: IconSettings, shortcut: '8' },
+  { id: 'table', label: 'Table', title: 'Function table', icon: IconTable, shortcut: '2' },
+  { id: 'stats', label: 'Stats', title: 'Statistics', icon: IconStats, shortcut: '3' },
+  { id: 'solver', label: 'Solver', title: 'Equation solver', icon: IconSolver, shortcut: '4' },
+  { id: 'programs', label: 'Programs', title: 'Write and run programs', icon: IconProgram, shortcut: '5' },
+  { id: 'history', label: 'History', title: 'History & saved graphs', icon: IconHistory, shortcut: '6' },
+  { id: 'settings', label: 'Settings', title: 'Settings', icon: IconSettings, shortcut: '7' },
 ];
 
 const SUBTITLES: Record<ViewId, string> = {
   calc: 'Scientific calculator',
-  graph: 'Functions & interactive graph',
+  yeq: 'Y= — functions to graph',
+  graph: 'Graph — press Y= to edit functions',
   table: 'Function values',
   stats: 'Lists, statistics & regression',
   solver: 'Equations & systems',
@@ -66,7 +66,7 @@ export function App() {
   const updateSettings = useStore((s) => s.updateSettings);
   useThemeEffect();
 
-  // Alt+1…8 switches sections
+  // Alt+1…7 switches sections
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!e.altKey || e.ctrlKey || e.metaKey) return;
@@ -80,7 +80,9 @@ export function App() {
     return () => window.removeEventListener('keydown', onKey);
   }, [setView]);
 
-  const current = NAV.find((n) => n.id === view) ?? NAV[0];
+  // Y= and GRAPH are reached with the keypad (as on a TI-84), so they are not in the sidebar
+  const SCREEN_NAMES: Partial<Record<ViewId, string>> = { yeq: 'Y=', graph: 'Graph' };
+  const current = NAV.find((n) => n.id === view) ?? { ...NAV[0], id: view, label: SCREEN_NAMES[view] ?? NAV[0].label };
   const isDark = theme === 'dark' || (theme === 'system' && !window.matchMedia('(prefers-color-scheme: light)').matches);
 
   const navButton = (n: NavItem) => (
@@ -102,9 +104,9 @@ export function App() {
         <div className="brand" title="Lumen Graphing Calculator">
           <div className="brand-mark">L</div>
         </div>
-        {NAV.slice(0, 6).map(navButton)}
+        {NAV.slice(0, 5).map(navButton)}
         <div className="spacer" />
-        {NAV.slice(6).map(navButton)}
+        {NAV.slice(5).map(navButton)}
       </nav>
 
       <div className={`main${view === 'calc' ? ' calc-mode' : ''}`}>
@@ -143,10 +145,11 @@ export function App() {
                 <span>{current.label}</span>
               </div>
             )}
-            <main className={`view${view === 'calc' || view === 'graph' ? '' : ' scroll'}`} id="main">
+            <main className={`view${view === 'calc' || view === 'graph' || view === 'yeq' ? '' : ' scroll'}`} id="main">
               <ErrorBoundary inline key={view}>
                 {view === 'calc' && <CalculateView />}
-                {view === 'graph' && <GraphView />}
+                {view === 'yeq' && <GraphView screen="equations" />}
+                {view === 'graph' && <GraphView screen="graph" />}
                 {view === 'table' && <TableView />}
                 {view === 'stats' && <StatsView />}
                 {view === 'solver' && <SolverView />}

@@ -208,7 +208,8 @@ function ModeMenu({ onClose }: { onClose: () => void }) {
 }
 
 const APPS: Array<{ label: string; description: string; action: KeyAction }> = [
-  { label: 'Graph', description: 'Y= editor and interactive graph', action: { type: 'nav', view: 'graph', intent: 'graph' } },
+  { label: 'Y= editor', description: 'Enter the functions to graph', action: { type: 'nav', view: 'yeq' } },
+  { label: 'Graph', description: 'Show the graph', action: { type: 'nav', view: 'graph', intent: 'graph' } },
   { label: 'Table', description: 'X/Y table of values', action: { type: 'nav', view: 'table' } },
   { label: 'Statistics', description: 'Lists, 1-Var/2-Var stats, regression, distributions', action: { type: 'nav', view: 'stats' } },
   { label: 'Solver', description: 'Equations, quadratics and 2×2 systems with steps', action: { type: 'nav', view: 'solver' } },

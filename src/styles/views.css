@@ -1358,3 +1358,15 @@
     height: 66%;
   }
 }
+
+/* Y= and GRAPH are separate full screens */
+.graph-layout[data-pane] {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+}
+.graph-layout[data-pane='list'] .graph-side {
+  width: 100%;
+  max-width: 820px;
+  margin: 0 auto;
+  border-right: 0;
+}

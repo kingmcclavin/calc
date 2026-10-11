@@ -4,7 +4,7 @@ import type { AngleMode, Scalar } from '../math/evaluate';
 import type { FormatOptions } from '../math/format';
 import { EXAMPLE_PROGRAMS } from '../math/program';
 
-export type ViewId = 'calc' | 'graph' | 'table' | 'stats' | 'solver' | 'programs' | 'history' | 'settings';
+export type ViewId = 'calc' | 'yeq' | 'graph' | 'table' | 'stats' | 'solver' | 'programs' | 'history' | 'settings';
 export type ThemePref = 'dark' | 'light' | 'system';
 /** What a TI-style key (Y=, WINDOW, ZOOM, TRACE, CALC, STAT PLOT) asks the target view to open. */
 export type GraphIntent = 'equations' | 'window' | 'zoom' | 'trace' | 'calc' | 'graph' | 'plot';
