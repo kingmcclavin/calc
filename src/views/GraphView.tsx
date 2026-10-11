@@ -3,6 +3,7 @@ import { GraphCanvas, type PlotCurve, type PlotPoint, type TraceState } from '..
 import { runAnalysis, TOOLS, type AnalysisOutput, type Tool } from '../graph/analysis';
 import { squareWindow, zoomWindow, ZOOM_PRESETS, type ZoomPreset } from '../graph/viewport';
 import { MathInput } from '../components/MathInput';
+import { focusedField, useKeypadHandler } from '../components/DeviceKeypad';
 import { SymbolBar } from '../components/SymbolBar';
 import { Tex } from '../components/Tex';
 import { Dialog, NumberField, toast } from '../components/ui';
@@ -153,6 +154,36 @@ export function GraphView() {
     },
     [curves, setWindow],
   );
+
+  // Keypad arrows drive the graph like a TI-84: trace along curves, or pan when not tracing
+  useKeypadHandler((a) => {
+    if (focusedField() || pane === 'list') return false;
+    const w = useStore.getState().window;
+    const xr = w.xMax - w.xMin;
+    const yr = w.yMax - w.yMin;
+    if (a.type === 'left' || a.type === 'right') {
+      const d = a.type === 'left' ? -1 : 1;
+      if (trace?.curveId) {
+        const x = trace.x + (d * xr) / 100;
+        setTrace({ curveId: trace.curveId, x });
+        if (x < w.xMin || x > w.xMax) setWindow({ ...w, xMin: w.xMin + (d * xr) / 100, xMax: w.xMax + (d * xr) / 100 });
+      } else setWindow({ ...w, xMin: w.xMin + d * xr * 0.1, xMax: w.xMax + d * xr * 0.1 });
+      return true;
+    }
+    if (a.type === 'scroll') {
+      if (trace?.curveId && curves.length) {
+        const i = curves.findIndex((c) => c.id === trace.curveId);
+        const j = (i + a.dir + curves.length) % curves.length;
+        setTrace({ curveId: curves[j].id, x: trace.x });
+      } else setWindow({ ...w, yMin: w.yMin - a.dir * yr * 0.1, yMax: w.yMax - a.dir * yr * 0.1 });
+      return true;
+    }
+    if (a.type === 'enter' && !trace && curves[0]) {
+      setTrace({ curveId: curves[0].id, x: (w.xMin + w.xMax) / 2 });
+      return true;
+    }
+    return false;
+  });
 
   /* ------------------------------ analysis tools ------------------------------ */
   const [toolFn, setToolFn] = useState<string | null>(null);

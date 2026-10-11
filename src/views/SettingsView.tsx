@@ -66,7 +66,7 @@ export function SettingsView() {
             <Row title="Coordinate labels">
               <Switch label="Coordinate labels" on={s.showLabels} onChange={(v) => update({ showLabels: v })} />
             </Row>
-            <Row title="On-screen keypad only (touch devices)" desc="Hide the system keyboard in the calculator so the keypad has room. Turn off to type with the phone keyboard.">
+            <Row title="On-screen keypad only (touch devices)" desc="Use the calculator keypad instead of the phone's keyboard in the calculator and math fields. Turn off to type with the phone keyboard.">
               <Switch label="On-screen keypad only" on={s.keypadOnly} onChange={(v) => update({ keypadOnly: v })} />
             </Row>
           </div>

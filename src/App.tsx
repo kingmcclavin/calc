@@ -2,6 +2,7 @@ import { useEffect, type ComponentType, type SVGProps } from 'react';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { IconCalc, IconGraph, IconHistory, IconMoon, IconSettings, IconProgram, IconSolver, IconStats, IconSun, IconTable } from './components/Icons';
 import { ToastHost } from './components/ui';
+import { DeviceKeypad } from './components/DeviceKeypad';
 import { useStore, type ViewId } from './state/store';
 import { CalculateView } from './views/CalculateView';
 import { GraphView } from './views/GraphView';
@@ -129,32 +130,37 @@ export function App() {
           >
             {isDark ? <IconSun /> : <IconMoon />}
           </button>
-          <button className="icon-btn mobile-only" aria-label="History" aria-pressed={view === 'history'} onClick={() => setView('history')}>
-            <IconHistory />
-          </button>
-          <button className="icon-btn mobile-only" aria-label="Settings" aria-pressed={view === 'settings'} onClick={() => setView('settings')}>
-            <IconSettings />
-          </button>
         </header>
 
-        <main className={`view${view === 'calc' || view === 'graph' ? '' : ' scroll'}`} id="main">
-          <ErrorBoundary inline key={view}>
-            {view === 'calc' && <CalculateView />}
-            {view === 'graph' && <GraphView />}
-            {view === 'table' && <TableView />}
-            {view === 'stats' && <StatsView />}
-            {view === 'solver' && <SolverView />}
-            {view === 'history' && <HistoryView />}
-            {view === 'settings' && <SettingsView />}
-            {view === 'programs' && <ProgramsView />}
-          </ErrorBoundary>
-        </main>
+        <div className="workspace">
+          <div className="screen-frame">
+            {view !== 'calc' && (
+              /* On phones the section name sits at the top of the screen, like a TI-84 menu title */
+              <div className="screen-title mobile-only-flex">
+                <button className="btn ghost sm" onClick={() => setView('calc')} aria-label="Back to the home screen">
+                  ‹ Home
+                </button>
+                <span>{current.label}</span>
+              </div>
+            )}
+            <main className={`view${view === 'calc' || view === 'graph' ? '' : ' scroll'}`} id="main">
+              <ErrorBoundary inline key={view}>
+                {view === 'calc' && <CalculateView />}
+                {view === 'graph' && <GraphView />}
+                {view === 'table' && <TableView />}
+                {view === 'stats' && <StatsView />}
+                {view === 'solver' && <SolverView />}
+                {view === 'history' && <HistoryView />}
+                {view === 'settings' && <SettingsView />}
+                {view === 'programs' && <ProgramsView />}
+              </ErrorBoundary>
+            </main>
+          </div>
+          {/* The keypad never disappears — every section is shown on the "screen" above/beside it */}
+          <DeviceKeypad />
+        </div>
       </div>
 
-      {/* On phones the calculator itself is full-screen; its keys (Y=, GRAPH, STAT, PRGM, APPS…) navigate */}
-      <nav className={`bottom-nav${view === 'calc' ? ' hidden-on-calc' : ''}`} aria-label="Sections">
-        {NAV.slice(0, 6).map(navButton)}
-      </nav>
       <ToastHost />
     </div>
   );

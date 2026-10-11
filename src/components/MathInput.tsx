@@ -1,5 +1,8 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, type KeyboardEvent } from 'react';
 import { applyEdit, setActiveTarget, type EditOp, type EditTarget } from './editing';
+import { useStore } from '../state/store';
+
+const IS_TOUCH = typeof window !== 'undefined' && !!window.matchMedia?.('(pointer: coarse)').matches;
 
 export interface MathInputHandle extends EditTarget {
   focus: () => void;
@@ -32,6 +35,9 @@ export const MathInput = forwardRef<MathInputHandle, Props>(function MathInput(
   ref,
 ) {
   const inputRef = useRef<HTMLInputElement>(null);
+  // On touch screens the on-screen keypad is the keyboard (unless turned off in Settings)
+  const keypadOnly = useStore((s) => s.settings.keypadOnly);
+  const hideSystemKeyboard = noSystemKeyboard ?? (IS_TOUCH && keypadOnly);
   const pendingCaret = useRef<number | null>(null);
   const lastSel = useRef<{ start: number; end: number }>({ start: value.length, end: value.length });
   const valueRef = useRef(value);
@@ -101,7 +107,7 @@ export const MathInput = forwardRef<MathInputHandle, Props>(function MathInput(
       aria-label={ariaLabel}
       aria-invalid={invalid || undefined}
       aria-describedby={ariaDescribedBy}
-      inputMode={noSystemKeyboard ? 'none' : 'text'}
+      inputMode={hideSystemKeyboard ? 'none' : 'text'}
       autoComplete="off"
       autoCorrect="off"
       autoCapitalize="off"

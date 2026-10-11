@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
-import { Keypad } from '../components/Keypad';
+import { useKeypadHandler } from '../components/DeviceKeypad';
 import type { KeyAction, KeyFace } from '../components/keypad';
 import { MathInput, type MathInputHandle } from '../components/MathInput';
 import { Tex } from '../components/Tex';
@@ -344,6 +344,12 @@ export function CalculateView() {
     [submit, moveSel, navigate, setInput],
   );
 
+  // The always-visible keypad sends its keys here while the home screen is open
+  useKeypadHandler((a, face) => {
+    onAction(a, face);
+    return true;
+  });
+
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
       e.preventDefault();
@@ -466,9 +472,6 @@ export function CalculateView() {
             )}
           </div>
         </div>
-      </section>
-      <section className="calc-keys">
-        <Keypad onAction={onAction} />
       </section>
     </div>
   );
