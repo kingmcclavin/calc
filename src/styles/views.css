@@ -1383,26 +1383,26 @@
 /* Larger text on phones: key labels scale with the screen height (and so with the key size) */
 @media (max-width: 899px) {
   .device-keys .key {
-    font-size: clamp(13px, 2.1vh, 19px);
+    font-size: clamp(13px, 1.8vh, 16.5px);
   }
   .device-keys .key-num {
-    font-size: clamp(17px, 3vh, 27px);
+    font-size: clamp(17px, 2.4vh, 22px);
   }
   .device-keys .key-op {
-    font-size: clamp(18px, 3vh, 27px);
+    font-size: clamp(18px, 2.4vh, 22px);
   }
   .device-keys .key-mod,
   .device-keys .key-clear,
   .device-keys .key-top,
   .device-keys .key-alpha,
   .device-keys .key-enter {
-    font-size: clamp(11px, 1.75vh, 16px);
+    font-size: clamp(11px, 1.45vh, 13.5px);
   }
   .device-keys .key-shift {
-    font-size: clamp(13px, 2vh, 18px);
+    font-size: clamp(13px, 1.75vh, 15.5px);
   }
   .device-keys .key-labels {
-    font-size: clamp(8.5px, 1.35vh, 12.5px);
+    font-size: clamp(8.5px, 1.1vh, 10.5px);
   }
   .entry-input {
     font-size: 1.4rem;
@@ -1411,10 +1411,10 @@
 @media (max-width: 899px) {
   /* the graph row has the longest words (WINDOW, STAT PLOT) */
   .device-keys .key-top {
-    font-size: clamp(10.5px, 1.55vh, 14.5px);
+    font-size: clamp(10.5px, 1.35vh, 12.5px);
   }
   .device-keys .key-top .key-labels {
-    font-size: clamp(8px, 1.2vh, 11px);
+    font-size: clamp(8px, 1.05vh, 9.5px);
   }
 }
 @media (max-width: 360px) {
