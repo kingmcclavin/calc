@@ -17,7 +17,11 @@ export interface ListVal {
   kind: 'list';
   items: Scalar[];
 }
-export type Value = Scalar | ListVal;
+export interface MatrixVal {
+  kind: 'matrix';
+  rows: Scalar[][];
+}
+export type Value = Scalar | ListVal | MatrixVal;
 
 export interface EvalContext {
   angle: AngleMode;
@@ -27,6 +31,8 @@ export interface EvalContext {
   lists: Record<string, number[]>;
   /** Parsed graph functions Y1–Y10 (null when empty or invalid) */
   functions: Record<string, Node | null>;
+  /** Matrix values held by Ans or variables (home screen only) */
+  matrices?: Record<string, MatrixVal>;
   /** Pseudo-random source (overridable for tests) */
   random?: () => number;
 }
@@ -82,6 +88,14 @@ export function applyNumeric(name: string, a: number[], angle: AngleMode, random
   const fromRad = angle === 'deg' ? 1 / DEG : 1;
   const x = a[0];
   switch (name) {
+    case 'mixed':
+      return mixedNumber(a[0], a[1], a[2]);
+    case 'det':
+      return x;
+    case 'identity':
+    case 'rref':
+    case 'ref':
+      return NaN;
     case 'sin':
       return trigClean(Math.sin(x * toRad), x);
     case 'cos':
@@ -254,12 +268,161 @@ function check(n: number, what: string): number {
 
 function asScalar(v: Value, where: string): Scalar {
   if (v.kind === 'list') fail('DATA TYPE', `${where} needs a number, not a list`);
+  if (v.kind === 'matrix') fail('DATA TYPE', `${where} needs a number, not a matrix`);
   return v;
 }
 
 function mapValue(v: Value, f: (s: Scalar) => Scalar): Value {
   if (v.kind === 'list') return { kind: 'list', items: v.items.map(f) };
+  if (v.kind === 'matrix') return { kind: 'matrix', rows: v.rows.map((r) => r.map(f)) };
   return f(v);
+}
+
+/** U n/d as a value: −2 1/3 means −(2 + 1/3), as on the TI-84. */
+function mixedNumber(u: number, n: number, d: number): number {
+  if (d === 0) return NaN;
+  const frac = n / d;
+  return u < 0 ? u - frac : u + frac;
+}
+
+/* ------------------------------ matrices ------------------------------ */
+
+const S0 = () => scalar(0, Q.R_ZERO);
+const S1 = () => scalar(1, Q.R_ONE);
+const isZeroS = (s: Scalar) => (s.r ? Q.isZero(s.r) : Math.abs(s.n) < 1e-14);
+const dims = (m: MatrixVal) => [m.rows.length, m.rows[0]?.length ?? 0] as const;
+
+export function identityMatrix(n: number): MatrixVal {
+  return { kind: 'matrix', rows: Array.from({ length: n }, (_, i) => Array.from({ length: n }, (_, j) => (i === j ? S1() : S0()))) };
+}
+
+function matMul(a: MatrixVal, b: MatrixVal): MatrixVal {
+  const [ar, ac] = dims(a);
+  const [br, bc] = dims(b);
+  if (ac !== br) fail('DIM MISMATCH', `Cannot multiply a ${ar}×${ac} matrix by a ${br}×${bc} matrix`);
+  const rows: Scalar[][] = [];
+  for (let i = 0; i < ar; i++) {
+    const row: Scalar[] = [];
+    for (let j = 0; j < bc; j++) {
+      let acc = S0();
+      for (let k = 0; k < ac; k++) acc = binaryScalar('+', acc, binaryScalar('*', a.rows[i][k], b.rows[k][j]));
+      row.push(acc);
+    }
+    rows.push(row);
+  }
+  return { kind: 'matrix', rows };
+}
+
+/** Gaussian elimination. Returns the echelon form, the determinant factor and the pivot count. */
+function eliminate(m: MatrixVal, reduced: boolean, augment?: MatrixVal): { rows: Scalar[][]; det: Scalar } {
+  const [r, c] = dims(m);
+  const rows = m.rows.map((row, i) => [...row, ...(augment ? augment.rows[i] : [])]);
+  const width = rows[0]?.length ?? 0;
+  let det = S1();
+  let pr = 0;
+  for (let col = 0; col < c && pr < r; col++) {
+    // pivot: the largest entry in the column (exact zeros are skipped)
+    let best = -1;
+    for (let i = pr; i < r; i++) if (!isZeroS(rows[i][col]) && (best < 0 || Math.abs(rows[i][col].n) > Math.abs(rows[best][col].n))) best = i;
+    if (best < 0) {
+      det = S0();
+      continue;
+    }
+    if (best !== pr) {
+      [rows[best], rows[pr]] = [rows[pr], rows[best]];
+      det = scalar(-det.n, det.r ? Q.neg(det.r) : null);
+    }
+    const piv = rows[pr][col];
+    det = binaryScalar('*', det, piv);
+    if (reduced || augment) rows[pr] = rows[pr].map((v) => binaryScalar('/', v, piv));
+    for (let i = reduced || augment ? 0 : pr + 1; i < r; i++) {
+      if (i === pr || isZeroS(rows[i][col])) continue;
+      const f = binaryScalar('/', rows[i][col], rows[pr][col]);
+      rows[i] = rows[i].map((v, j) => (j < col ? v : binaryScalar('-', v, binaryScalar('*', f, rows[pr][j]))));
+    }
+    if (!reduced && !augment) rows[pr] = rows[pr].map((v) => binaryScalar('/', v, piv));
+    pr++;
+  }
+  if (pr < Math.min(r, c) || r !== c) det = r === c ? S0() : det;
+  // tidy floating noise
+  const clean = rows.map((row) => row.map((v) => (!v.r && Math.abs(v.n) < 1e-13 ? S0() : v)));
+  return { rows: clean.map((row) => row.slice(0, width)), det };
+}
+
+function squareCheck(m: MatrixVal, what: string) {
+  const [r, c] = dims(m);
+  if (r !== c) fail('INVALID DIM', `${what} needs a square matrix (this one is ${r}×${c})`);
+}
+
+export function determinant(m: MatrixVal): Scalar {
+  squareCheck(m, 'det');
+  return eliminate(m, false).det;
+}
+
+function inverse(m: MatrixVal): MatrixVal {
+  squareCheck(m, 'The inverse');
+  const n = m.rows.length;
+  const { rows, det } = eliminate(m, true, identityMatrix(n));
+  if (isZeroS(det)) fail('SINGULAR MAT', 'The matrix is singular (its determinant is 0), so it has no inverse');
+  return { kind: 'matrix', rows: rows.map((row) => row.slice(n)) };
+}
+
+function matrixPower(m: MatrixVal, e: Scalar): MatrixVal {
+  squareCheck(m, 'A matrix power');
+  if (!Number.isInteger(e.n)) fail('DOMAIN', 'A matrix can only be raised to an integer power');
+  if (Math.abs(e.n) > 255) fail('DOMAIN', 'Matrix powers are limited to −255…255');
+  let base = e.n < 0 ? inverse(m) : m;
+  let k = Math.abs(e.n);
+  let acc = identityMatrix(m.rows.length);
+  while (k > 0) {
+    if (k & 1) acc = matMul(acc, base);
+    base = matMul(base, base);
+    k >>= 1;
+  }
+  return acc;
+}
+
+function transpose(m: MatrixVal): MatrixVal {
+  const [r, c] = dims(m);
+  return { kind: 'matrix', rows: Array.from({ length: c }, (_, j) => Array.from({ length: r }, (_, i) => m.rows[i][j])) };
+}
+
+function matrixBinary(op: string, a: Value, b: Value): Value {
+  if (a.kind === 'list' || b.kind === 'list') fail('DATA TYPE', 'Lists and matrices cannot be combined');
+  if (a.kind === 'matrix' && b.kind === 'matrix') {
+    switch (op) {
+      case '+':
+      case '-': {
+        const [ar, ac] = dims(a);
+        const [br, bc] = dims(b);
+        if (ar !== br || ac !== bc) fail('DIM MISMATCH', `Cannot ${op === '+' ? 'add' : 'subtract'} a ${ar}×${ac} and a ${br}×${bc} matrix`);
+        return { kind: 'matrix', rows: a.rows.map((row, i) => row.map((v, j) => binaryScalar(op, v, b.rows[i][j]))) };
+      }
+      case '*':
+        return matMul(a, b);
+      case '/':
+        return matMul(a, inverse(b));
+      case '=':
+      case '≠': {
+        const same =
+          a.rows.length === b.rows.length &&
+          a.rows[0].length === b.rows[0].length &&
+          a.rows.every((row, i) => row.every((v, j) => binaryScalar('=', v, b.rows[i][j]).n === 1));
+        return bool(op === '=' ? same : !same);
+      }
+    }
+    fail('DATA TYPE', `"${op}" does not work on two matrices`);
+  }
+  if (a.kind === 'matrix') {
+    const s = b as Scalar;
+    if (op === '^') return matrixPower(a, s);
+    if (op === '*' || op === '/') return mapValue(a, (v) => binaryScalar(op, v, s));
+    fail('DATA TYPE', `"${op}" between a matrix and a number is not defined — use * or /`);
+  }
+  const s = a as Scalar;
+  const m = b as MatrixVal;
+  if (op === '*') return mapValue(m, (v) => binaryScalar('*', s, v));
+  fail('DATA TYPE', `"${op}" between a number and a matrix is not defined`);
 }
 
 function zipValues(a: Value, b: Value, f: (x: Scalar, y: Scalar) => Scalar): Value {
@@ -267,6 +430,7 @@ function zipValues(a: Value, b: Value, f: (x: Scalar, y: Scalar) => Scalar): Val
     if (a.items.length !== b.items.length) fail('DIM MISMATCH', 'Lists must have the same length');
     return { kind: 'list', items: a.items.map((x, i) => f(x, b.items[i])) };
   }
+  if (a.kind === 'matrix' || b.kind === 'matrix') fail('DATA TYPE', 'Matrices cannot be used here');
   if (a.kind === 'list') return { kind: 'list', items: a.items.map((x) => f(x, b as Scalar)) };
   if (b.kind === 'list') return { kind: 'list', items: b.items.map((y) => f(a, y)) };
   return f(a, b);
@@ -541,6 +705,8 @@ export class Evaluator {
         return scalar(node.name === 'pi' ? Math.PI : Math.E);
       case 'var': {
         if (node.name in this.overrides) return this.overrides[node.name];
+        const mat = this.ctx.matrices?.[node.name];
+        if (mat) return mat;
         if (/^L[1-6]$/.test(node.name)) {
           const l = this.ctx.lists[node.name];
           if (!l || l.length === 0) fail('UNDEFINED', `List ${node.name} is empty`);
@@ -556,6 +722,8 @@ export class Evaluator {
       }
       case 'list':
         return { kind: 'list', items: node.items.map((it) => asScalar(this.eval(it), 'A list element')) };
+      case 'matrix':
+        return { kind: 'matrix', rows: node.rows.map((row) => row.map((it) => asScalar(this.eval(it), 'A matrix entry'))) };
       case 'unary': {
         const v = this.eval(node.arg);
         if (node.op === '+') return v;
@@ -564,10 +732,15 @@ export class Evaluator {
       case 'binary': {
         const a = this.eval(node.left);
         const b = this.eval(node.right);
+        if (a.kind === 'matrix' || b.kind === 'matrix') return matrixBinary(node.op, a, b);
         return zipValues(a, b, (x, y) => binaryScalar(node.op, x, y));
       }
       case 'postfix': {
         const v = this.eval(node.arg);
+        if (node.op === 'ᵀ') {
+          if (v.kind !== 'matrix') fail('DATA TYPE', 'ᵀ (transpose) needs a matrix');
+          return transpose(v);
+        }
         if (node.op === '!') return mapValue(v, factorialScalar);
         // degree marker
         if (this.ctx.angle === 'deg') return v;
@@ -596,8 +769,33 @@ export class Evaluator {
 
     const args = argNodes.map((n) => this.eval(n));
 
-    if (LIST_FUNCTIONS.has(name) || ((name === 'sum' || name === 'prod') && args.length === 1)) {
-      const v = args[0];
+    // Matrix functions
+    if (name === 'identity') {
+      const n = asScalar(args[0], 'identity');
+      if (!Number.isInteger(n.n) || n.n < 1 || n.n > 99) fail('DOMAIN', 'identity needs a whole number from 1 to 99');
+      return identityMatrix(n.n);
+    }
+    if (name === 'det' || name === 'rref' || name === 'ref') {
+      const m = args[0];
+      if (m.kind !== 'matrix') {
+        if (name === 'det' && m.kind === 'scalar') return m;
+        fail('DATA TYPE', `${name} needs a matrix, e.g. ${name}([[1,2][3,4]])`);
+      }
+      if (name === 'det') return determinant(m);
+      return { kind: 'matrix', rows: eliminate(m, name === 'rref').rows };
+    }
+    if (name === 'dim' && args[0].kind === 'matrix') {
+      const [r, c] = dims(args[0]);
+      return { kind: 'list', items: [scalar(r, Q.ratFromInt(r)), scalar(c, Q.ratFromInt(c))] };
+    }
+    if (args.some((a) => a.kind === 'matrix')) {
+      if (args.length !== 1) fail('DATA TYPE', `${name} does not accept a matrix`);
+      return mapValue(args[0], (s) => this.scalarCall(name, [s]));
+    }
+    const largs = args as Array<Scalar | ListVal>;
+
+    if (LIST_FUNCTIONS.has(name) || ((name === 'sum' || name === 'prod') && largs.length === 1)) {
+      const v = largs[0];
       const items = v.kind === 'list' ? v.items : [v];
       if (items.length === 0) fail('DIM MISMATCH', 'List is empty');
       const nums = items.map((s) => s.n);
@@ -627,26 +825,32 @@ export class Evaluator {
       }
     }
 
-    if ((name === 'min' || name === 'max') && args.length === 1 && args[0].kind === 'list') {
-      const items = args[0].items;
+    if ((name === 'min' || name === 'max') && largs.length === 1 && largs[0].kind === 'list') {
+      const items = largs[0].items;
       if (!items.length) fail('DIM MISMATCH', 'List is empty');
       return this.scalarCall(name, items);
     }
 
     // Broadcast over a single list argument (e.g. sin({0, 30, 90}))
-    const listIdx = args.findIndex((a) => a.kind === 'list');
+    const listIdx = largs.findIndex((a) => a.kind === 'list');
     if (listIdx >= 0) {
-      const len = (args[listIdx] as ListVal).items.length;
-      for (const a of args) if (a.kind === 'list' && a.items.length !== len) fail('DIM MISMATCH', 'Lists must have the same length');
+      const len = (largs[listIdx] as ListVal).items.length;
+      for (const a of largs) if (a.kind === 'list' && a.items.length !== len) fail('DIM MISMATCH', 'Lists must have the same length');
       const items: Scalar[] = [];
-      for (let i = 0; i < len; i++) items.push(this.scalarCall(name, args.map((a) => (a.kind === 'list' ? a.items[i] : a))));
+      for (let i = 0; i < len; i++) items.push(this.scalarCall(name, largs.map((a) => (a.kind === 'list' ? a.items[i] : a))));
       return { kind: 'list', items };
     }
-    return this.scalarCall(name, args as Scalar[]);
+    return this.scalarCall(name, largs as Scalar[]);
   }
 
   private scalarCall(name: string, args: Scalar[]): Scalar {
     if (name === 'npr' || name === 'ncr') return combinatoric(name, args[0], args[1]);
+    if (name === 'mixed') {
+      const [u, n, d] = args;
+      if (!Number.isInteger(u.n) || n.n < 0) fail('DOMAIN', 'A mixed number needs a whole-number part and a non-negative fraction');
+      const frac = binaryScalar('/', n, d);
+      return binaryScalar(u.n < 0 ? '-' : '+', u, frac);
+    }
     const ex = exactCall(name, args, this.ctx.angle);
     if (ex) return ex;
     const nums = args.map((a) => a.n);
@@ -737,6 +941,8 @@ function dependsOn(node: Node, bound: string[], ctx: EvalContext, seen = new Set
       return bound.includes(node.name);
     case 'list':
       return node.items.some((n) => dependsOn(n, bound, ctx, seen));
+    case 'matrix':
+      return node.rows.some((r) => r.some((n) => dependsOn(n, bound, ctx, seen)));
     case 'unary':
     case 'postfix':
       return dependsOn(node.arg, bound, ctx, seen);
@@ -795,6 +1001,8 @@ export function compileWith(node: Node, ctx: EvalContext, bound: string[], overr
       }
       case 'list':
         throw new MathError('DATA TYPE', 'Lists cannot be used here');
+      case 'matrix':
+        throw new MathError('DATA TYPE', 'Matrices cannot be used here');
       case 'unary': {
         const a = c(n.arg);
         return n.op === '-' ? (env) => -a(env) : a;

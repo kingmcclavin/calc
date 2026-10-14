@@ -27,6 +27,11 @@ const F = (name: string, minArgs: number, maxArgs: number, description: string, 
 });
 
 export const FUNCTIONS: FnInfo[] = [
+  F('det', 1, 1, 'det(matrix): determinant', { tex: '\\det' }),
+  F('identity', 1, 1, 'identity(n): n×n identity matrix', { tex: '\\operatorname{identity}' }),
+  F('rref', 1, 1, 'rref(matrix): reduced row-echelon form', { tex: '\\operatorname{rref}' }),
+  F('ref', 1, 1, 'ref(matrix): row-echelon form', { tex: '\\operatorname{ref}' }),
+  F('mixed', 3, 3, 'Un/d mixed number: mixed(U, n, d) = U n/d'),
   F('sin', 1, 1, 'Sine (respects degree/radian mode)', { tex: '\\sin' }),
   F('cos', 1, 1, 'Cosine (respects degree/radian mode)', { tex: '\\cos' }),
   F('tan', 1, 1, 'Tangent (respects degree/radian mode)', { tex: '\\tan' }),
@@ -102,6 +107,7 @@ export const FN_ALIASES: Record<string, string> = {
   stddev: 'stdev',
   nthroot: 'root',
   int: 'floor',
+  logbase: 'log',
 };
 
 /** Display name used when converting an AST back to text. */

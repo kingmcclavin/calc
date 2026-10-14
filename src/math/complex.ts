@@ -80,6 +80,7 @@ export function evaluateComplex(node: Node, ctx: EvalContext, complexVars: Recor
       case 'postfix': {
         const a = ev(n.arg);
         if (n.op === '°') return C(a.re * (deg ? 1 : Math.PI / 180), a.im * (deg ? 1 : Math.PI / 180));
+        if (n.op === 'ᵀ') throw new MathError('DATA TYPE', 'ᵀ needs a matrix');
         if (!isReal(a)) throw new MathError('DATA TYPE', 'Factorial needs a real number');
         return C(applyNumeric('gamma', [a.re + 1], ctx.angle));
       }
@@ -147,6 +148,8 @@ export function evaluateComplex(node: Node, ctx: EvalContext, complexVars: Recor
       }
       case 'list':
         throw new MathError('DATA TYPE', 'Lists are not supported with complex numbers');
+      case 'matrix':
+        throw new MathError('DATA TYPE', 'Matrices are not supported with complex numbers');
     }
   };
   const z = clean(ev(node));
@@ -168,6 +171,8 @@ export function usesI(node: Node): boolean {
       return node.args.some(usesI);
     case 'list':
       return node.items.some(usesI);
+    case 'matrix':
+      return node.rows.some((r) => r.some(usesI));
     case 'store':
       return usesI(node.value);
     default:

@@ -8,9 +8,10 @@ export type Node =
   | { type: 'const'; name: 'pi' | 'e' | 'i' }
   | { type: 'var'; name: string } // x, A–Z, θ, Ans
   | { type: 'list'; items: Node[] }
+  | { type: 'matrix'; rows: Node[][] }
   | { type: 'unary'; op: '-' | '+'; arg: Node }
   | { type: 'binary'; op: BinaryOp; left: Node; right: Node; implicit?: boolean }
-  | { type: 'postfix'; op: '!' | '°' | '%'; arg: Node }
+  | { type: 'postfix'; op: '!' | '°' | '%' | 'ᵀ'; arg: Node }
   | { type: 'call'; name: string; args: Node[] }
   | { type: 'store'; value: Node; target: string }; // target: A–Z, θ, x or L1–L6
 

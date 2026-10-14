@@ -177,7 +177,7 @@ export function evaluateSequences(fns: ModeFn[], ctx: EvalContext, nMin: number,
       if (!expr) return null;
       const startNode = parseOrNull(fn.b);
       const startVal = startNode ? new Evaluator(ctx).eval(startNode) : null;
-      const starts: number[] = startVal ? (startVal.kind === 'list' ? startVal.items.map((s) => s.n) : [startVal.n]) : [];
+      const starts: number[] = startVal ? (startVal.kind === 'list' ? startVal.items.map((s) => s.n) : startVal.kind === 'scalar' ? [startVal.n] : []) : [];
       return { id: fn.id, expr: rewriteSeq(expr), starts };
     } catch (e) {
       errors[fn.id] = errorText(e);

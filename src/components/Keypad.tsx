@@ -1,5 +1,6 @@
 import { memo, useState } from 'react';
-import { ARROWS, KEYS, MATH_MENU, type KeyAction, type KeyDef, type KeyFace, type MenuId } from './keypad';
+import { ARROWS, KEYS, MATH_MENU, SHORTCUT_TABS, type KeyAction, type KeyDef, type KeyFace, type MenuId, type ShortcutItem, type ShortcutTabId } from './keypad';
+import { ShortcutMenu } from './ShortcutMenu';
 import { Dialog } from './ui';
 import { PROGRAM_NAME_RE } from '../math/program';
 import { MODE_VARIABLE } from '../graph/modes';
@@ -18,6 +19,7 @@ export const Keypad = memo(function Keypad({ onAction }: Props) {
   const [alpha, setAlpha] = useState<AlphaState>('off');
   const [menu, setMenu] = useState<null | { id: MenuId; tab?: string }>(null);
   const [wizard, setWizard] = useState<string | null>(null);
+  const [fTab, setFTab] = useState<ShortcutTabId>('frac');
 
   const run = (a: KeyAction, face: KeyFace) => {
     if (a.type === 'second') {
@@ -35,6 +37,7 @@ export const Keypad = memo(function Keypad({ onAction }: Props) {
       return;
     }
     setSecond(false);
+    if (a.type === 'nav') setMenu(null);
     if (a.type === 'menu') {
       setMenu({ id: a.menu, tab: a.tab });
       return;
@@ -43,6 +46,14 @@ export const Keypad = memo(function Keypad({ onAction }: Props) {
   };
 
   const press = (k: KeyDef) => {
+    // ALPHA + Y=/WINDOW/ZOOM/TRACE/GRAPH = f1–f5: the FRAC, FUNC, MTRX and YVAR shortcut menus
+    if (alpha !== 'off' && k.fkey && !second) {
+      if (alpha === 'once') setAlpha('off');
+      const t = SHORTCUT_TABS.find((s) => s.fkey === k.fkey);
+      if (t) setFTab(t.id);
+      setMenu({ id: 'fmenu' });
+      return;
+    }
     if (alpha !== 'off' && k.alpha && !second) {
       if (alpha === 'once') setAlpha('off');
       onAction({ type: 'insert', text: k.alpha }, { label: k.alpha, action: { type: 'none' }, title: k.alpha });
@@ -66,9 +77,11 @@ export const Keypad = memo(function Keypad({ onAction }: Props) {
 
   const renderKey = (k: KeyDef) => {
     const showSecond = second && !!k.second;
-    const showAlpha = alpha !== 'off' && !!k.alpha && !second;
-    const main = showSecond ? k.second!.label : showAlpha ? k.alpha! : k.label;
-    const title = showSecond ? k.second!.title : showAlpha ? `Letter ${k.alpha}` : k.title;
+    const alphaLabel = k.alpha ?? (k.fkey ? `f${k.fkey}` : undefined);
+    const showAlpha = alpha !== 'off' && !!alphaLabel && !second;
+    const main = showSecond ? k.second!.label : showAlpha ? alphaLabel! : k.label;
+    const fTitle = k.fkey ? `f${k.fkey}: ${SHORTCUT_TABS.find((s) => s.fkey === k.fkey)?.label ?? 'shortcut'} menu` : '';
+    const title = showSecond ? k.second!.title : showAlpha ? (k.alpha ? `Letter ${k.alpha}` : fTitle) : k.title;
     return (
       <button
         key={k.id}
@@ -82,10 +95,10 @@ export const Keypad = memo(function Keypad({ onAction }: Props) {
         onPointerDown={(e) => e.preventDefault()}
         onClick={() => press(k)}
       >
-        {(k.second || k.alpha) && (
+        {(k.second || alphaLabel) && (
           <span className="key-labels" aria-hidden="true">
             <span className="lbl-2nd">{k.second?.label ?? ''}</span>
-            <span className="lbl-alpha">{k.alpha ?? ''}</span>
+            <span className={`lbl-alpha${k.fkey ? ' lbl-f' : ''}`}>{alphaLabel ?? ''}</span>
           </span>
         )}
         <span className="key-main">{main}</span>
@@ -144,6 +157,22 @@ export const Keypad = memo(function Keypad({ onAction }: Props) {
             setWizard(null);
             setMenu(null);
             onAction({ type: 'insert', text }, { label: text, action: { type: 'none' }, title: text });
+          }}
+        />
+      )}
+      {menu?.id === 'fmenu' && (
+        <ShortcutMenu
+          tab={fTab}
+          setTab={setFTab}
+          onClose={() => setMenu(null)}
+          onPick={(it: ShortcutItem) => {
+            setMenu(null);
+            if (it.wizard && useStore.getState().settings.statWizards && WIZARDS[it.wizard]) {
+              setWizard(it.wizard);
+              return;
+            }
+            const wrap = it.insert.endsWith('(') && it.caret === undefined;
+            onAction({ type: 'insert', text: it.insert, wrap, caret: it.caret }, { label: it.label, action: { type: 'none' }, title: it.label });
           }}
         />
       )}
@@ -360,7 +389,11 @@ function PrgmMenu({ onClose, onExec }: { onClose: () => void; onExec: (name: str
 /* ------------------------------------------------------------------------ */
 
 type WizardField = { label: string; value?: string };
-const WIZARDS: Record<string, { title: string; fields: WizardField[] }> = {
+const WIZARDS: Record<string, { title: string; fields: WizardField[]; paste?: string }> = {
+  'Σ(': { title: 'Σ summation', paste: 'sum(', fields: [{ label: 'expression' }, { label: 'variable', value: 'K' }, { label: 'start' }, { label: 'end' }] },
+  'logBASE(': { title: 'logBASE', fields: [{ label: 'value' }, { label: 'base' }] },
+  'root(': { title: 'ˣ√ root', fields: [{ label: 'radicand' }, { label: 'index x' }] },
+  'mixed(': { title: 'Un/d mixed number', fields: [{ label: 'whole number U' }, { label: 'numerator n' }, { label: 'denominator d' }] },
   'normalpdf(': { title: 'normalpdf', fields: [{ label: 'x value' }, { label: 'μ', value: '0' }, { label: 'σ', value: '1' }] },
   'normalcdf(': { title: 'normalcdf', fields: [{ label: 'lower' }, { label: 'upper' }, { label: 'μ', value: '0' }, { label: 'σ', value: '1' }] },
   'invNorm(': { title: 'invNorm', fields: [{ label: 'area' }, { label: 'μ', value: '0' }, { label: 'σ', value: '1' }] },
@@ -378,7 +411,7 @@ function Wizard({ name, onClose, onPaste }: { name: string; onClose: () => void;
   const [values, setValues] = useState(() => spec.fields.map((f) => f.value ?? ''));
   const missing = values.some((v) => !v.trim());
   const paste = () => {
-    if (!missing) onPaste(`${name}${values.map((v) => v.trim()).join(',')})`);
+    if (!missing) onPaste(`${spec.paste ?? name}${values.map((v) => v.trim()).join(',')})`);
   };
   return (
     <Dialog

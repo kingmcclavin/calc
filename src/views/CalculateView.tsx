@@ -11,15 +11,61 @@ import { evaluateComplex, formatComplex, usesI, type Complex } from '../math/com
 import { parse } from '../math/parser';
 import { toTex } from '../math/latex';
 import type { Node } from '../math/ast';
-import type { EvalContext } from '../math/evaluate';
+import type { EvalContext, MatrixVal, Scalar, Value } from '../math/evaluate';
 import { runProgram, ProgramError, type ProgramIO } from '../math/program';
-import { formatValue } from '../math/format';
+import { formatValue, type FormatOptions } from '../math/format';
 import { useEvalContext } from '../state/context';
 import { nextTime, uid, useStore, type HistoryEntry, type ListName } from '../state/store';
 
 /** Entries currently on the calculator screen (ClrHome / CLEAR hide older ones). */
 /** Complex values held by Ans and stored variables (kept for this session). */
 const complexVars: Record<string, Complex> = {};
+/** Matrix values held by Ans and stored variables (kept for this session). */
+const matrixVars: Record<string, MatrixVal> = {};
+
+/** ▸F◂▸D and ▸n/d◂▸Un/d (ALPHA f1 FRAC menu) change how an answer is shown. */
+const CONVERTERS = [
+  { suffix: '▸F◂▸D', tex: '\\blacktriangleright\\mathrm{F}\\blacktriangleleft\\blacktriangleright\\mathrm{D}' },
+  { suffix: '▸n/d◂▸Un/d', tex: '\\blacktriangleright\\tfrac{n}{d}\\blacktriangleleft\\blacktriangleright\\mathrm{U}\\tfrac{n}{d}' },
+] as const;
+
+/** Best fraction for a decimal (denominator up to 10000), like ▸Frac on the TI-84. */
+function approxFraction(x: number): { n: bigint; d: bigint } | null {
+  if (!Number.isFinite(x) || Math.abs(x) > 1e12) return null;
+  let h0 = 0, h1 = 1, k0 = 1, k1 = 0, v = x;
+  for (let i = 0; i < 40; i++) {
+    const a = Math.floor(v);
+    [h0, h1] = [h1, a * h1 + h0];
+    [k0, k1] = [k1, a * k1 + k0];
+    if (k1 > 10000) return null;
+    if (Math.abs(x - h1 / k1) <= 1e-12 * Math.max(1, Math.abs(x))) return { n: BigInt(h1), d: BigInt(k1) };
+    const f = v - a;
+    if (f < 1e-15) break;
+    v = 1 / f;
+  }
+  return Math.abs(x - h1 / k1) <= 1e-12 * Math.max(1, Math.abs(x)) && k1 <= 10000 ? { n: BigInt(h1), d: BigInt(k1) } : null;
+}
+
+function mapScalars(v: Value, f: (s: Scalar) => Scalar): Value {
+  if (v.kind === 'scalar') return f(v);
+  if (v.kind === 'list') return { kind: 'list', items: v.items.map(f) };
+  return { kind: 'matrix', rows: v.rows.map((r) => r.map(f)) };
+}
+
+/** Format a value after a ▸F◂▸D or ▸n/d◂▸Un/d conversion. */
+function convertedFormat(v: Value, suffix: string, fmt: FormatOptions) {
+  const shownExact = formatValue(v, fmt).exact;
+  if (suffix === '▸F◂▸D') {
+    const isFrac = (s: Scalar) => !!s.r && s.r.d !== 1n;
+    const anyFrac = v.kind === 'scalar' ? isFrac(v) : v.kind === 'list' ? v.items.some(isFrac) : v.rows.some((r) => r.some(isFrac));
+    // a fraction on screen becomes a decimal; a decimal becomes a fraction when one fits
+    if (anyFrac && shownExact && fmt.answers !== 'dec') return formatValue(v, { ...fmt, answers: 'dec' });
+    const asFrac = mapScalars(v, (s) => (s.r ? s : { ...s, r: approxFraction(s.n) }));
+    return formatValue(asFrac, { ...fmt, answers: 'auto' });
+  }
+  const withFrac = mapScalars(v, (s) => (s.r ? s : { ...s, r: approxFraction(s.n) }));
+  return formatValue(withFrac, { ...fmt, answers: 'auto', fracType: fmt.fracType === 'mixed' ? 'nd' : 'mixed' });
+}
 
 function refsComplexVar(n: Node): boolean {
   switch (n.type) {
@@ -117,7 +163,10 @@ export function CalculateView() {
   );
 
   const evaluateInput = useCallback(
-    (src: string) => {
+    (fullSrc: string) => {
+      const conv = CONVERTERS.find((c) => fullSrc.trimEnd().endsWith(c.suffix));
+      // like the TI-84, a conversion on an empty line applies to Ans
+      const src = conv ? fullSrc.trimEnd().slice(0, -conv.suffix.length).trim() || 'Ans' : fullSrc;
       // Complex numbers: expressions with i, earlier complex answers, or NONREAL results in a+bi / re^θi mode
       let ast: Node | null = null;
       try {
@@ -127,7 +176,7 @@ export function CalculateView() {
       }
       const complexMode = useStore.getState().settings.complex;
       const wantsComplex = ast && (usesI(ast) || refsComplexVar(ast));
-      const res = wantsComplex ? null : calculate(src, ctx);
+      const res = wantsComplex ? null : calculate(src, { ...ctx, matrices: { ...matrixVars } });
       if (!res || !res.ok) {
         if (ast && (wantsComplex || (res && res.kind === 'NONREAL' && complexMode !== 'real'))) {
           try {
@@ -162,13 +211,14 @@ export function CalculateView() {
         }
         return;
       }
-      if (res.value.kind === 'scalar') delete complexVars.Ans;
+      if (res.value.kind !== 'list') delete complexVars.Ans;
       if (res.storedTo) delete complexVars[res.storedTo];
-      const f = formatValue(res.value, fmt);
+      // a conversion shows only the converted form
+      const f = conv ? { ...convertedFormat(res.value, conv.suffix, fmt), approxTex: undefined } : formatValue(res.value, fmt);
       const entry: HistoryEntry = {
         id: uid(),
-        input: src,
-        inputTex: res.inputTex,
+        input: fullSrc,
+        inputTex: conv ? `${res.inputTex}${conv.tex}` : res.inputTex,
         resultTex: f.tex,
         approxTex: f.approxTex,
         resultText: f.text,
@@ -181,10 +231,18 @@ export function CalculateView() {
         return;
       }
       addHistory(entry);
+      if (res.value.kind === 'matrix') {
+        // matrices live in Ans (and letters stored with STO→) for this session
+        matrixVars.Ans = res.value;
+        if (target) matrixVars[target] = res.value;
+      } else {
+        delete matrixVars.Ans;
+        if (target) delete matrixVars[target];
+      }
       if (res.value.kind === 'scalar') {
         setVar('Ans', res.value);
         if (target) setVar(target, res.value);
-      } else if (target) {
+      } else if (target && res.value.kind === 'list') {
         useStore.getState().setList(target as ListName, res.value.items.map((it) => it.n));
       }
       record(src, '');
@@ -254,7 +312,7 @@ export function CalculateView() {
         clear: () => useStore.getState().clearScreen(),
         store: (n, v) => {
           if (v.kind === 'list') useStore.getState().setList(n as ListName, v.items.map((it) => it.n));
-          else useStore.getState().setVar(n, v);
+          else if (v.kind === 'scalar') useStore.getState().setVar(n, v);
         },
         getProgram: (n) => useStore.getState().programs.find((p) => p.name === n)?.source ?? null,
         cancelled: () => cancelRef.current,

@@ -16,6 +16,8 @@ type TokType =
   | 'rparen'
   | 'lbrace'
   | 'rbrace'
+  | 'lbrack'
+  | 'rbrack'
   | 'comma'
   | 'store'
   | 'rel' // = ≠ < > ≤ ≥
@@ -135,10 +137,10 @@ export function tokenize(src: string): Token[] {
         push('rparen', ')', pos);
         break;
       case '[':
-        push('lparen', '(', pos);
+        push('lbrack', '[', pos);
         break;
       case ']':
-        push('rparen', ')', pos);
+        push('rbrack', ']', pos);
         break;
       case '{':
         push('lbrace', '{', pos);
@@ -180,6 +182,9 @@ export function tokenize(src: string): Token[] {
         break;
       case '°':
         push('post', '°', pos);
+        break;
+      case 'ᵀ':
+        push('post', 'ᵀ', pos);
         break;
       case '→':
         push('store', '→', pos);
@@ -312,6 +317,7 @@ class Parser {
     const t = this.peek();
     if (t.type !== 'eof') {
       if (t.type === 'rparen') throw new MathError('SYNTAX', 'Unmatched ")"', t.pos);
+      if (t.type === 'rbrack') throw new MathError('SYNTAX', 'Unmatched "]"', t.pos);
       throw new MathError('SYNTAX', `Unexpected "${t.value}"`, t.pos);
     }
     return node;
@@ -359,7 +365,7 @@ class Parser {
   /** Can the current token begin an implicitly multiplied factor? */
   private startsFactor(): boolean {
     const t = this.peek();
-    return t.type === 'num' || t.type === 'ident' || t.type === 'func' || t.type === 'lparen' || t.type === 'lbrace';
+    return t.type === 'num' || t.type === 'ident' || t.type === 'func' || t.type === 'lparen' || t.type === 'lbrace' || t.type === 'lbrack';
   }
 
   private parseTerm(): Node {
@@ -410,7 +416,7 @@ class Parser {
       let node: Node = { type: 'binary', op: '^', left: base, right: exp };
       // allow postfix after exponent e.g. x²!
       while (this.peek().type === 'post') {
-        const op = this.next().value as '!' | '°';
+        const op = this.next().value as '!' | '°' | 'ᵀ';
         node = { type: 'postfix', op, arg: node };
       }
       return node;
@@ -421,10 +427,35 @@ class Parser {
   private parsePostfix(): Node {
     let node = this.parsePrimary();
     while (this.peek().type === 'post') {
-      const op = this.next().value as '!' | '°';
+      const op = this.next().value as '!' | '°' | 'ᵀ';
       node = { type: 'postfix', op, arg: node };
     }
     return node;
+  }
+
+  /** Rows of a matrix after its opening "[": [a,b][c,d]] (commas between rows are optional). */
+  private parseMatrix(openPos: number): Node {
+    const rows: Node[][] = [];
+    while (this.peek().type === 'lbrack') {
+      const rowOpen = this.next();
+      const row: Node[] = [];
+      if (this.peek().type === 'rbrack') throw new MathError('SYNTAX', 'A matrix row is empty', rowOpen.pos);
+      row.push(this.parseFull());
+      while (this.peek().type === 'comma') {
+        this.next();
+        row.push(this.parseFull());
+      }
+      const c = this.peek();
+      if (c.type === 'rbrack') this.next();
+      else if (c.type !== 'eof') throw new MathError('SYNTAX', 'Expected "]" to end the matrix row', c.pos);
+      if (rows.length && row.length !== rows[0].length) throw new MathError('DIM MISMATCH', 'Every matrix row needs the same number of entries', rowOpen.pos);
+      rows.push(row);
+      if (this.peek().type === 'comma' && this.toks[this.i + 1]?.type === 'lbrack') this.next();
+    }
+    const c = this.peek();
+    if (c.type === 'rbrack') this.next();
+    else if (c.type !== 'eof' && c.type !== 'store') throw new MathError('SYNTAX', `Expected "]" to close the matrix opened at position ${openPos + 1}`, c.pos);
+    return { type: 'matrix', rows };
   }
 
   /** Consume ")" — or accept end of input (closing parentheses are optional at the end, like on a TI-84). */
@@ -466,6 +497,16 @@ class Parser {
         if (this.peek().type === 'rparen') throw new MathError('SYNTAX', 'Empty parentheses', t.pos);
         const e = this.parseFull();
         this.closeParen(t.pos);
+        return e;
+      }
+      case 'lbrack': {
+        // [[1,2][3,4]] is a matrix; a lone [ … ] groups like parentheses
+        if (this.peek().type === 'lbrack') return this.parseMatrix(t.pos);
+        if (this.peek().type === 'rbrack') throw new MathError('SYNTAX', 'Empty brackets', t.pos);
+        const e = this.parseFull();
+        const c = this.peek();
+        if (c.type === 'rbrack' || c.type === 'rparen') this.next();
+        else if (c.type !== 'eof' && c.type !== 'store') throw new MathError('SYNTAX', `Expected "]" to match "[" at position ${t.pos + 1}`, c.pos);
         return e;
       }
       case 'lbrace': {
@@ -512,6 +553,8 @@ class Parser {
         throw new MathError('SYNTAX', 'Expression ends unexpectedly', t.pos);
       case 'rparen':
         throw new MathError('SYNTAX', 'Unexpected ")"', t.pos);
+      case 'rbrack':
+        throw new MathError('SYNTAX', 'Unexpected "]"', t.pos);
       case 'comma':
         throw new MathError('SYNTAX', 'Unexpected ","', t.pos);
       case 'op':

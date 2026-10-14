@@ -69,6 +69,8 @@ export function toTex(n: Node): string {
       return varTex(n.name);
     case 'list':
       return `\\left\\{${n.items.map(toTex).join(',\\,')}\\right\\}`;
+    case 'matrix':
+      return matrixTex(n.rows.map((r) => r.map(toTex)));
     case 'store':
       return `${toTex(n.value)}\\rightarrow ${varTex(n.target)}`;
     case 'unary': {
@@ -77,7 +79,7 @@ export function toTex(n: Node): string {
     }
     case 'postfix': {
       const inner = prec(n.arg) < P.atom ? paren(toTex(n.arg)) : toTex(n.arg);
-      return n.op === '!' ? `${inner}!` : `${inner}^{\\circ}`;
+      return n.op === '!' ? `${inner}!` : n.op === 'ᵀ' ? `${inner}^{\\mathsf{T}}` : `${inner}^{\\circ}`;
     }
     case 'binary': {
       const { op, left, right } = n;
@@ -120,6 +122,10 @@ export function toTex(n: Node): string {
   }
 }
 
+export function matrixTex(rows: string[][]): string {
+  return `\\begin{bmatrix}${rows.map((r) => r.join(' & ')).join(' \\\\ ')}\\end{bmatrix}`;
+}
+
 function callTex(name: string, args: Node[]): string {
   const a = args.map(toTex);
   const y = /^Y(\d+)$/.exec(name);
@@ -145,6 +151,8 @@ function callTex(name: string, args: Node[]): string {
       return `\\left.\\frac{d}{d${a[1]}}${paren(a[0])}\\right|_{${a[1]}=${a[2]}}`;
     case 'fnint':
       return `\\int_{${a[2]}}^{${a[3]}}${a[0]}\\,d${a[1]}`;
+    case 'mixed':
+      return `${a[0]}\\tfrac{${a[1]}}{${a[2]}}`;
     case 'sum':
       if (args.length === 4) return `\\sum_{${a[1]}=${a[2]}}^{${a[3]}}${paren(a[0])}`;
       break;

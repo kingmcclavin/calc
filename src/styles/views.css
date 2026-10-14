@@ -1552,3 +1552,161 @@
 .split-pane .table-settings {
   display: none;
 }
+
+/* ALPHA f1–f4 shortcut menus (FRAC / FUNC / MTRX / YVAR), drawn over the screen */
+.screen-frame {
+  position: relative;
+}
+.lbl-f {
+  font-style: italic;
+  flex-shrink: 0;
+}
+/* keep "STAT PLOT" whole next to f1 on narrow keys */
+.key:has(.lbl-f) .key-labels {
+  left: 3px;
+  right: 3px;
+  gap: 1px;
+}
+.key:has(.lbl-f) .lbl-2nd {
+  letter-spacing: -0.04em;
+  white-space: nowrap;
+}
+.fmenu-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 8px 8px 0;
+  background: color-mix(in srgb, #000 18%, transparent);
+}
+.fmenu {
+  align-self: flex-start;
+  min-width: min(340px, 100%);
+  max-width: 100%;
+  max-height: calc(100% - 52px);
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 2px solid var(--text);
+  border-radius: 6px;
+  box-shadow: 0 8px 28px rgb(0 0 0 / 0.35);
+  overflow: hidden;
+}
+.fmenu-list {
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+.fmenu-list.two-col {
+  display: grid;
+  grid-auto-flow: column;
+  grid-template-rows: repeat(5, auto);
+}
+.fmenu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px 7px 6px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: 500 17px/1.2 var(--font-mono);
+  text-align: left;
+  cursor: pointer;
+}
+.fmenu-item + .fmenu-item {
+  border-top: 1px dashed color-mix(in srgb, var(--text) 18%, transparent);
+}
+.fmenu-list.two-col .fmenu-item {
+  border-top: 0;
+}
+.fmenu-num {
+  min-width: 2ch;
+  padding: 0 2px;
+  border-radius: 3px;
+}
+.fmenu-item.on .fmenu-num {
+  background: var(--text);
+  color: var(--surface);
+}
+.fmenu-item.on {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+.fmenu-label {
+  flex: 1;
+  white-space: nowrap;
+}
+.fmenu-glyph {
+  margin-left: 16px;
+  color: var(--accent);
+  white-space: nowrap;
+}
+.fmenu-matrix {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  padding: 0;
+}
+.fmenu-dims {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+.fmenu-dim-col + .fmenu-dim-col {
+  border-left: 2px solid var(--text);
+}
+.fmenu-dim-head {
+  padding: 6px 18px;
+  border-bottom: 2px solid var(--text);
+  text-align: center;
+  font: 600 17px var(--font-mono);
+}
+.fmenu-dim,
+.fmenu-ok {
+  display: block;
+  width: 100%;
+  padding: 3px 18px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: 500 17px var(--font-mono);
+  text-align: center;
+  cursor: pointer;
+}
+.fmenu-dim.sel {
+  font-weight: 800;
+  text-decoration: underline;
+}
+.fmenu-dim.on,
+.fmenu-ok.on {
+  background: var(--text);
+  color: var(--surface);
+  text-decoration: none;
+}
+.fmenu-ok {
+  border-top: 2px solid var(--text);
+  padding: 6px;
+  font-weight: 700;
+}
+.fmenu-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 6px 0 8px;
+}
+.fmenu-tabs button {
+  flex: 1 1 0;
+  max-width: 96px;
+  padding: 5px 4px;
+  border: 2px solid var(--text);
+  border-bottom-width: 3px;
+  border-radius: 6px 6px 0 0;
+  background: var(--surface);
+  color: var(--text);
+  font: 700 15px var(--font-mono);
+  cursor: pointer;
+}
+.fmenu-tabs button.on {
+  background: var(--text);
+  color: var(--surface);
+}

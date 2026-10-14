@@ -1,7 +1,7 @@
 import type { EditOp } from './editing';
 import type { GraphIntent, ViewId } from '../state/store';
 
-export type MenuId = 'math' | 'vars' | 'apps' | 'mode' | 'prgm';
+export type MenuId = 'math' | 'vars' | 'apps' | 'mode' | 'prgm' | 'fmenu';
 
 export type KeyAction =
   | EditOp
@@ -32,6 +32,8 @@ export interface KeyDef extends KeyFace {
   second?: KeyFace;
   /** Letter typed when ALPHA is active (A–Z, θ) */
   alpha?: string;
+  /** ALPHA + this key is f1–f5 (the shortcut menus) */
+  fkey?: 1 | 2 | 3 | 4 | 5;
   ariaLabel?: string;
 }
 
@@ -44,11 +46,11 @@ const fn = (text: string) => ins(text, { wrap: true });
  */
 export const KEYS: KeyDef[] = [
   // Graphing row
-  { id: 'yeq', label: 'Y=', variant: 'top', action: { type: 'nav', view: 'yeq' }, title: 'Edit graph functions (Y= editor)', second: { label: 'STAT PLOT', action: { type: 'nav', view: 'stats', intent: 'plot' }, title: 'Scatter plots & regression' } },
-  { id: 'window', label: 'WINDOW', variant: 'top', action: { type: 'nav', view: 'graph', intent: 'window' }, title: 'Graph window settings', second: { label: 'TBLSET', action: { type: 'nav', view: 'table' }, title: 'Table setup' } },
-  { id: 'zoom', label: 'ZOOM', variant: 'top', action: { type: 'nav', view: 'graph', intent: 'zoom' }, title: 'Zoom presets', second: { label: 'FORMAT', action: { type: 'nav', view: 'settings' }, title: 'Display format & settings' } },
-  { id: 'trace', label: 'TRACE', variant: 'top', action: { type: 'nav', view: 'graph', intent: 'trace' }, title: 'Trace along a graph', second: { label: 'CALC', action: { type: 'nav', view: 'graph', intent: 'calc' }, title: 'Graph analysis: zeros, min/max, intersect, dy/dx, ∫' } },
-  { id: 'graph', label: 'GRAPH', variant: 'top', action: { type: 'nav', view: 'graph', intent: 'graph' }, title: 'Show the graph', second: { label: 'TABLE', action: { type: 'nav', view: 'table' }, title: 'Table of values' } },
+  { id: 'yeq', fkey: 1, label: 'Y=', variant: 'top', action: { type: 'nav', view: 'yeq' }, title: 'Edit graph functions (Y= editor)', second: { label: 'STAT PLOT', action: { type: 'nav', view: 'stats', intent: 'plot' }, title: 'Scatter plots & regression' } },
+  { id: 'window', fkey: 2, label: 'WINDOW', variant: 'top', action: { type: 'nav', view: 'graph', intent: 'window' }, title: 'Graph window settings', second: { label: 'TBLSET', action: { type: 'nav', view: 'table' }, title: 'Table setup' } },
+  { id: 'zoom', fkey: 3, label: 'ZOOM', variant: 'top', action: { type: 'nav', view: 'graph', intent: 'zoom' }, title: 'Zoom presets', second: { label: 'FORMAT', action: { type: 'nav', view: 'settings' }, title: 'Display format & settings' } },
+  { id: 'trace', fkey: 4, label: 'TRACE', variant: 'top', action: { type: 'nav', view: 'graph', intent: 'trace' }, title: 'Trace along a graph', second: { label: 'CALC', action: { type: 'nav', view: 'graph', intent: 'calc' }, title: 'Graph analysis: zeros, min/max, intersect, dy/dx, ∫' } },
+  { id: 'graph', fkey: 5, label: 'GRAPH', variant: 'top', action: { type: 'nav', view: 'graph', intent: 'graph' }, title: 'Show the graph', second: { label: 'TABLE', action: { type: 'nav', view: 'table' }, title: 'Table of values' } },
 
   // Rows 2–3 (left three columns; arrows on the right)
   { id: '2nd', label: '2nd', variant: 'shift', action: { type: 'second' }, title: 'Second function: use the amber label on the next key' },
@@ -235,3 +237,49 @@ export const MATH_MENU: MenuTab[] = [
     ],
   },
 ];
+
+/* ALPHA f1–f5 shortcut menus (TI-84 Plus CE): FRAC, FUNC, MTRX, YVAR */
+export interface ShortcutItem {
+  label: string;
+  /** Template shown on the right, like the blue glyphs on the TI-84 */
+  glyph: string;
+  insert: string;
+  caret?: number;
+  /** STAT WIZARDS form to open instead, when wizards are on */
+  wizard?: string;
+}
+export type ShortcutTabId = 'frac' | 'func' | 'mtrx' | 'yvar';
+export const SHORTCUT_TABS: Array<{ id: ShortcutTabId; label: string; fkey: number }> = [
+  { id: 'frac', label: 'FRAC', fkey: 1 },
+  { id: 'func', label: 'FUNC', fkey: 2 },
+  { id: 'mtrx', label: 'MTRX', fkey: 3 },
+  { id: 'yvar', label: 'YVAR', fkey: 4 },
+];
+export const SHORTCUT_ITEMS: Record<Exclude<ShortcutTabId, 'mtrx'>, ShortcutItem[]> = {
+  frac: [
+    { label: 'n/d', glyph: '□⁄□', insert: '()/()', caret: 1 },
+    { label: 'Un/d', glyph: '□ □⁄□', insert: 'mixed(', wizard: 'mixed(' },
+    { label: '▸n/d◂▸Un/d', glyph: '', insert: '▸n/d◂▸Un/d' },
+    { label: '▸F◂▸D', glyph: '', insert: '▸F◂▸D' },
+  ],
+  func: [
+    { label: 'abs(', glyph: '|□|', insert: 'abs(' },
+    { label: 'summation Σ(', glyph: 'Σ□', insert: 'sum(', wizard: 'Σ(' },
+    { label: 'nDeriv(', glyph: 'd/d□|□', insert: 'nDeriv(', wizard: 'nDeriv(' },
+    { label: 'fnInt(', glyph: '∫□d□', insert: 'fnInt(', wizard: 'fnInt(' },
+    { label: 'logBASE(', glyph: 'log□□', insert: 'logBASE(', wizard: 'logBASE(' },
+    { label: 'ˣ√', glyph: '□√□', insert: 'root(', wizard: 'root(' },
+    { label: 'nPr', glyph: '□P□', insert: ' nPr ' },
+    { label: 'nCr', glyph: '□C□', insert: ' nCr ' },
+    { label: '!', glyph: '□!', insert: '!' },
+  ],
+  yvar: Array.from({ length: 10 }, (_, i) => {
+    const n = i === 9 ? 0 : i + 1;
+    return { label: `Y${n}`, glyph: '', insert: `Y${n === 0 ? 10 : n}(` };
+  }),
+};
+
+/** Text for an empty rows×cols matrix template, e.g. [[,][,]] */
+export function matrixTemplate(rows: number, cols: number): string {
+  return `[${Array.from({ length: rows }, () => `[${','.repeat(cols - 1)}]`).join('')}]`;
+}

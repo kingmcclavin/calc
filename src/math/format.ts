@@ -130,6 +130,14 @@ export function formatScalar(s: Scalar, opt: FormatOptions = DEFAULT_FORMAT): Fo
 
 export function formatValue(v: Value, opt: FormatOptions = DEFAULT_FORMAT): FormattedResult {
   if (v.kind === 'scalar') return formatScalar(v, opt);
+  if (v.kind === 'matrix') {
+    const cells = v.rows.map((row) => row.map((it) => formatScalar(it, opt)));
+    return {
+      tex: `\\begin{bmatrix}${cells.map((r) => r.map((p) => p.tex).join(' & ')).join(' \\\\ ')}\\end{bmatrix}`,
+      text: `[${cells.map((r) => `[${r.map((p) => p.text).join(',')}]`).join('')}]`,
+      exact: cells.every((r) => r.every((p) => p.exact)),
+    };
+  }
   const parts = v.items.map((it) => formatScalar(it, opt));
   const anyApprox = parts.some((p) => !p.exact);
   return {
