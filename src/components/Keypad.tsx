@@ -388,10 +388,17 @@ function PrgmMenu({ onClose, onExec }: { onClose: () => void; onExec: (name: str
 /* STAT WIZARDS: argument forms for distribution and calculus functions        */
 /* ------------------------------------------------------------------------ */
 
-type WizardField = { label: string; value?: string };
+type WizardField = { label: string; value?: string; optional?: boolean; hint?: string };
 const WIZARDS: Record<string, { title: string; fields: WizardField[]; paste?: string }> = {
   'Σ(': { title: 'Σ summation', paste: 'sum(', fields: [{ label: 'expression' }, { label: 'variable', value: 'K' }, { label: 'start' }, { label: 'end' }] },
   'logBASE(': { title: 'logBASE', fields: [{ label: 'value' }, { label: 'base' }] },
+  'norm(': {
+    title: 'norm (p-norm)',
+    fields: [
+      { label: 'list or matrix', hint: '{3,-4} or [[1,2][3,4]]' },
+      { label: 'p (optional)', optional: true, hint: '1, 2, 3… or ∞' },
+    ],
+  },
   'root(': { title: 'ˣ√ root', fields: [{ label: 'radicand' }, { label: 'index x' }] },
   'mixed(': { title: 'Un/d mixed number', fields: [{ label: 'whole number U' }, { label: 'numerator n' }, { label: 'denominator d' }] },
   'normalpdf(': { title: 'normalpdf', fields: [{ label: 'x value' }, { label: 'μ', value: '0' }, { label: 'σ', value: '1' }] },
@@ -409,9 +416,9 @@ const WIZARDS: Record<string, { title: string; fields: WizardField[]; paste?: st
 function Wizard({ name, onClose, onPaste }: { name: string; onClose: () => void; onPaste: (text: string) => void }) {
   const spec = WIZARDS[name];
   const [values, setValues] = useState(() => spec.fields.map((f) => f.value ?? ''));
-  const missing = values.some((v) => !v.trim());
+  const missing = values.some((v, i) => !v.trim() && !spec.fields[i].optional);
   const paste = () => {
-    if (!missing) onPaste(`${spec.paste ?? name}${values.map((v) => v.trim()).join(',')})`);
+    if (!missing) onPaste(`${spec.paste ?? name}${values.map((v) => v.trim()).filter((v, i) => v || !spec.fields[i].optional).join(',')})`);
   };
   return (
     <Dialog
@@ -435,6 +442,7 @@ function Wizard({ name, onClose, onPaste }: { name: string; onClose: () => void;
             <input
               className="input"
               value={values[i]}
+              placeholder={f.hint}
               autoFocus={i === 0}
               onChange={(e) => setValues(values.map((v, j) => (j === i ? e.target.value : v)))}
               onKeyDown={(e) => e.key === 'Enter' && paste()}

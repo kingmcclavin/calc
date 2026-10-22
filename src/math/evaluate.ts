@@ -92,6 +92,8 @@ export function applyNumeric(name: string, a: number[], angle: AngleMode, random
       return mixedNumber(a[0], a[1], a[2]);
     case 'det':
       return x;
+    case 'norm':
+      return Math.abs(x);
     case 'identity':
     case 'rref':
     case 'ref':
@@ -380,6 +382,97 @@ function matrixPower(m: MatrixVal, e: Scalar): MatrixVal {
     k >>= 1;
   }
   return acc;
+}
+
+/* ------------------------------- norms ------------------------------- */
+
+const absS = (s: Scalar): Scalar => (s.r ? scalar(Math.abs(s.n), s.r.n < 0n ? Q.neg(s.r) : s.r) : scalar(Math.abs(s.n)));
+const maxS = (xs: Scalar[]): Scalar => xs.reduce((m, x) => (x.n > m.n ? x : m), S0());
+const sumS = (xs: Scalar[]): Scalar => xs.reduce((acc, x) => binaryScalar('+', acc, x), S0());
+
+/** √ of a scalar, exact when it is a perfect square of a rational. */
+function sqrtS(s: Scalar): Scalar {
+  return exactCall('sqrt', [s], 'rad') ?? scalar(check(Math.sqrt(s.n), 'norm'));
+}
+
+/** Vector p-norm, scaled by the largest entry so big or tiny values do not overflow. */
+function vectorNorm(xs: Scalar[], p: number): Scalar {
+  const a = xs.map(absS);
+  if (p === Infinity) return maxS(a);
+  if (p === 1) return sumS(a);
+  if (p === 2) return sqrtS(sumS(a.map((x) => binaryScalar('*', x, x))));
+  const m = Math.max(...a.map((x) => x.n));
+  if (m === 0) return S0();
+  const s = a.reduce((acc, x) => acc + (x.n / m) ** p, 0);
+  return scalar(check(m * s ** (1 / p), 'norm'));
+}
+
+/** Largest eigenvalue of a symmetric matrix (cyclic Jacobi rotations). */
+function largestSymEigen(a: number[][]): number {
+  const n = a.length;
+  const m = a.map((r) => [...r]);
+  for (let sweep = 0; sweep < 60; sweep++) {
+    let off = 0;
+    for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) off += m[i][j] * m[i][j];
+    if (off < 1e-30 * Math.max(1, ...m.map((r, i) => r[i] * r[i]))) break;
+    for (let p = 0; p < n; p++) {
+      for (let q = p + 1; q < n; q++) {
+        if (Math.abs(m[p][q]) < 1e-300) continue;
+        const theta = (m[q][q] - m[p][p]) / (2 * m[p][q]);
+        const t = Math.sign(theta || 1) / (Math.abs(theta) + Math.sqrt(theta * theta + 1));
+        const c = 1 / Math.sqrt(t * t + 1);
+        const s = t * c;
+        for (let k = 0; k < n; k++) {
+          const kp = m[k][p];
+          const kq = m[k][q];
+          m[k][p] = c * kp - s * kq;
+          m[k][q] = s * kp + c * kq;
+        }
+        for (let k = 0; k < n; k++) {
+          const pk = m[p][k];
+          const qk = m[q][k];
+          m[p][k] = c * pk - s * qk;
+          m[q][k] = s * pk + c * qk;
+        }
+      }
+    }
+  }
+  return Math.max(...m.map((r, i) => r[i]));
+}
+
+/** Snap results like 4.0000000000002 to the nearby integer. */
+const tidy = (v: number) => (Math.abs(v - Math.round(v)) < 1e-11 * Math.max(1, Math.abs(v)) ? Math.round(v) : v);
+
+function matrixNorm(m: MatrixVal, p: number | null): Scalar {
+  const [r, c] = dims(m);
+  if (p === null) return vectorNorm(m.rows.flat(), 2); // Frobenius
+  if (p === 1) return maxS(Array.from({ length: c }, (_, j) => sumS(m.rows.map((row) => absS(row[j]))))); // largest column sum
+  if (p === Infinity) return maxS(m.rows.map((row) => sumS(row.map(absS)))); // largest row sum
+  if (p === 2) {
+    // spectral norm: largest singular value = √(largest eigenvalue of AᵀA)
+    const a = m.rows.map((row) => row.map((v) => v.n));
+    const ata = Array.from({ length: c }, (_, i) => Array.from({ length: c }, (_, j) => a.reduce((acc, row) => acc + row[i] * row[j], 0)));
+    const lam = Math.max(0, largestSymEigen(ata));
+    const v = tidy(Math.sqrt(lam));
+    return Number.isInteger(v) ? scalar(v, Q.ratFromInt(v)) : scalar(check(v, 'norm'));
+  }
+  void r;
+  fail('DOMAIN', 'Matrix norms use p = 1 (column sums), 2 (spectral) or ∞ (row sums); norm(M) with no p is the Frobenius norm');
+}
+
+function pNorm(v: Value, pv: Value | undefined): Scalar {
+  let p: number | null = null;
+  if (pv) {
+    const s = asScalar(pv, 'The p of norm');
+    if (!(s.n >= 1)) fail('DOMAIN', 'norm needs p ≥ 1 (or ∞)');
+    p = s.n;
+  }
+  if (v.kind === 'matrix') return matrixNorm(v, p);
+  if (v.kind === 'list') {
+    if (!v.items.length) fail('DIM MISMATCH', 'List is empty');
+    return vectorNorm(v.items, p ?? 2);
+  }
+  return absS(v);
 }
 
 function transpose(m: MatrixVal): MatrixVal {
@@ -768,6 +861,12 @@ export class Evaluator {
     }
 
     const args = argNodes.map((n) => this.eval(n));
+
+    if (name === 'norm') return pNorm(args[0], args[1]);
+    // sum/prod/min/max of a matrix use all of its entries
+    if (['sum', 'prod', 'min', 'max'].includes(name) && args.length === 1 && args[0].kind === 'matrix') {
+      args[0] = { kind: 'list', items: args[0].rows.flat() };
+    }
 
     // Matrix functions
     if (name === 'identity') {

@@ -27,6 +27,7 @@ const F = (name: string, minArgs: number, maxArgs: number, description: string, 
 });
 
 export const FUNCTIONS: FnInfo[] = [
+  F('norm', 1, 2, 'norm(v) or norm(v, p): p-norm of a list or matrix (p = 1, 2, …, ∞); norm(M) is the Frobenius norm', { tex: '\\operatorname{norm}' }),
   F('det', 1, 1, 'det(matrix): determinant', { tex: '\\det' }),
   F('identity', 1, 1, 'identity(n): n×n identity matrix', { tex: '\\operatorname{identity}' }),
   F('rref', 1, 1, 'rref(matrix): reduced row-echelon form', { tex: '\\operatorname{rref}' }),

@@ -47,3 +47,30 @@ describe('FRAC/FUNC templates', () => {
     expect(show('logBASE(8,2)')).toBe('3');
   });
 });
+
+describe('norm', () => {
+  it('vector p-norms', () => {
+    expect(show('norm({3,-4})')).toBe('5');
+    expect(show('norm({1,-2,3},1)')).toBe('6');
+    expect(show('norm({1,-5,3},∞)')).toBe('5');
+    expect(show('norm({1,-5,3},inf)')).toBe('5');
+    expect(show('norm({1,-2,3},3)')).toBe('3.301927249');
+    expect(show('norm({1,1})')).toBe('1.414213562');
+    expect(show('norm({1/2,1/2,1/2,1/2})')).toBe('1');
+    expect(show('norm(-7)')).toBe('7');
+    expect(show('norm({1ᴇ200,1ᴇ200},3)')).toBe('1.25992105ᴇ200');
+  });
+  it('matrix norms', () => {
+    expect(show('norm([[1,2][3,4]])')).toBe('5.477225575'); // Frobenius √30
+    expect(show('norm([[1,-2][3,4]],1)')).toBe('6'); // column sums 4, 6
+    expect(show('norm([[1,-2][3,4]],∞)')).toBe('7'); // row sums 3, 7
+    expect(show('norm([[3,0][0,-4]],2)')).toBe('4');
+    expect(show('norm([[1,2][3,4]],2)')).toBe('5.464985704');
+    expect(show('norm([[1,2,3]],2)')).toBe('3.741657387');
+    expect(show('norm([[1,2][3,4]],3)')).toBe('ERR:DOMAIN');
+    expect(show('norm({1,2},0.5)')).toBe('ERR:DOMAIN');
+  });
+  it('sum of a matrix', () => {
+    expect(show('sum([[1,2][3,4]])')).toBe('10');
+  });
+});

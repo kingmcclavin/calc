@@ -30,6 +30,7 @@ function prec(n: Node): number {
 const paren = (s: string) => `\\left(${s}\\right)`;
 
 function numTex(text: string): string {
+  if (text === '∞') return '\\infty';
   const m = /^(-?[0-9.]+)e(-?\d+)$/.exec(text);
   if (m) return `${m[1]}\\times10^{${m[2]}}`;
   return text;

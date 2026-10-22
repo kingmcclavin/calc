@@ -155,6 +155,8 @@ export const MATH_MENU: MenuTab[] = [
       { label: 'max(', insert: 'max(', description: 'Maximum of values or a list' },
       { label: 'root(', insert: 'root(', description: 'root(x, n): n-th root' },
       { label: '∛(', insert: '∛(', description: 'Cube root' },
+      { label: 'norm(', insert: 'norm(', description: 'norm(v, p): p-norm of a list or matrix; norm(v) is the 2-norm (Frobenius for a matrix)' },
+      { label: '∞', insert: '∞', description: 'Infinity, for the max norm: norm(v, ∞)' },
       { label: 'sign(', insert: 'sign(', description: 'Sign: −1, 0 or 1' },
     ],
   },
@@ -272,6 +274,7 @@ export const SHORTCUT_ITEMS: Record<Exclude<ShortcutTabId, 'mtrx'>, ShortcutItem
     { label: 'nPr', glyph: '□P□', insert: ' nPr ' },
     { label: 'nCr', glyph: '□C□', insert: ' nCr ' },
     { label: '!', glyph: '□!', insert: '!' },
+    { label: 'norm(', glyph: '‖□‖ₚ', insert: 'norm(', wizard: 'norm(' },
   ],
   yvar: Array.from({ length: 10 }, (_, i) => {
     const n = i === 9 ? 0 : i + 1;

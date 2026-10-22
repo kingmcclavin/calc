@@ -41,6 +41,8 @@ const WORDS: Array<[string, TokType, string]> = (() => {
   for (const [alias, target] of Object.entries(FN_ALIASES)) list.push([alias, 'func', target]);
   list.push(['npr', 'combo', 'nPr'], ['ncr', 'combo', 'nCr']);
   list.push(['and', 'logic', 'and'], ['xor', 'logic', 'xor'], ['or', 'logic', 'or']);
+  // "inf" types ∞ (lower case only, so ALPHA I·N·F stays a product of variables)
+  list.push(['infinity', 'num', '∞'], ['inf', 'num', '∞']);
   list.push(['pi', 'ident', 'pi'], ['ans', 'ident', 'Ans'], ['theta', 'ident', 'θ']);
   // Function npr/ncr are also callable as functions: handled in parser when followed by "("
   return list.sort((a, b) => b[0].length - a[0].length);
@@ -186,6 +188,9 @@ export function tokenize(src: string): Token[] {
       case 'ᵀ':
         push('post', 'ᵀ', pos);
         break;
+      case '∞':
+        push('num', '∞', pos);
+        break;
       case '→':
         push('store', '→', pos);
         break;
@@ -245,7 +250,7 @@ function splitIdentifier(
       return;
     }
     // and/or/xor only match when typed in lower case, so ALPHA letters like O,R stay variables
-    const match = WORDS.find(([w, type]) => rest.startsWith(w) && (type !== 'logic' || word.startsWith(w, j)));
+    const match = WORDS.find(([w, type]) => rest.startsWith(w) && ((type !== 'logic' && type !== 'num') || word.startsWith(w, j)));
     if (match) {
       // nPr/nCr followed by "(" act as functions
       if (match[1] === 'combo' && j + match[0].length === word.length && src[end] === '(') {
@@ -473,6 +478,8 @@ class Parser {
     const t = this.next();
     switch (t.type) {
       case 'num': {
+        // ∞ is only meaningful as the p of norm(v, ∞)
+        if (t.value === '∞') return { type: 'num', value: Infinity, text: '∞' };
         const value = Number(t.value);
         if (!Number.isFinite(value)) throw new MathError('OVERFLOW', 'Number is too large', t.pos);
         return { type: 'num', value, text: t.value };
