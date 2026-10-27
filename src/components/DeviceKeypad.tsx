@@ -38,17 +38,53 @@ function runHandlers(a: KeyAction, face: KeyFace): boolean {
 
 const EDIT_TYPES = new Set(['insert', 'backspace', 'delete', 'clear', 'left', 'right', 'home', 'end']);
 
-/** The text field the user is editing inside the current section, if any. */
-export function focusedField(): HTMLInputElement | HTMLTextAreaElement | null {
+type Field = HTMLInputElement | HTMLTextAreaElement;
+
+function isEditable(el: Element | null): el is Field {
+  if (!(el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement)) return false;
+  if (el instanceof HTMLInputElement && !['text', 'search', ''].includes(el.type)) return false;
+  if (el.readOnly || el.disabled) return false;
+  // must be on the current screen and visible
+  return !!document.getElementById('main')?.contains(el) && el.isConnected && el.getClientRects().length > 0;
+}
+
+/**
+ * The last text field used on the screen. On phones a field easily loses focus
+ * (a tap elsewhere, a menu or form closing), so keypad presses keep going to it,
+ * like the cursor on a TI-84 screen stays where it was.
+ */
+let lastField: Field | null = null;
+if (typeof document !== 'undefined') {
+  document.addEventListener('focusin', (e) => {
+    if (isEditable(e.target as Element)) lastField = e.target as Field;
+  });
+}
+
+/** The field that has keyboard focus right now (not a remembered one). */
+export function activeField(): Field | null {
   const el = document.activeElement;
-  if (!(el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement)) return null;
-  if (el instanceof HTMLInputElement && !['text', 'search', ''].includes(el.type)) return null;
-  if (el.readOnly || el.disabled) return null;
-  return document.getElementById('main')?.contains(el) ? el : null;
+  return isEditable(el) ? el : null;
+}
+
+/** The text field the user is editing inside the current section, if any. */
+export function focusedField(): Field | null {
+  const el = document.activeElement;
+  if (isEditable(el)) return el;
+  // the field had focus most recently and is still on screen
+  if (lastField && isEditable(lastField) && !(el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement)) return lastField;
+  return null;
+}
+
+/** On the Y= screen the cursor starts on Y1 (or the first line), as on a TI-84. */
+function defaultField(view: string): Field | null {
+  if (view !== 'yeq') return null;
+  const el = document.querySelector('#main .fn-input-row input, #main .graph-side-scroll input.input');
+  return isEditable(el) ? el : null;
 }
 
 /** Apply an edit to a (React-controlled) field by setting its value natively and firing "input". */
-function editField(el: HTMLInputElement | HTMLTextAreaElement, op: EditOp) {
+function editField(el: Field, op: EditOp) {
+  if (document.activeElement !== el) el.focus({ preventScroll: true });
   const res = applyEdit({ value: el.value, start: el.selectionStart ?? el.value.length, end: el.selectionEnd ?? el.value.length }, op);
   if (res.value !== el.value) {
     const proto = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
@@ -68,7 +104,21 @@ export function DeviceKeypad() {
     if (runHandlers(a, face)) return;
     if (st.view === 'calc') return;
 
-    const field = focusedField();
+    const field = focusedField() ?? defaultField(st.view);
+    // Y= screen: ENTER and ▲▼ move between the Y1, Y2, … lines
+    if (st.view === 'yeq' && (a.type === 'enter' || a.type === 'scroll')) {
+      const lines = [...document.querySelectorAll<HTMLInputElement>('#main .graph-side-scroll input.input')].filter(isEditable);
+      if (lines.length) {
+        const i = field ? lines.indexOf(field as HTMLInputElement) : -1;
+        const d = a.type === 'enter' ? 1 : a.dir;
+        const next = lines[Math.min(lines.length - 1, Math.max(0, i < 0 ? 0 : i + d))];
+        next.focus({ preventScroll: true });
+        next.scrollIntoView({ block: 'nearest' });
+        const end = next.value.length;
+        next.setSelectionRange(end, end);
+        return;
+      }
+    }
     if (field) {
       if (EDIT_TYPES.has(a.type)) {
         // CLEAR on an empty field leaves it, like CLEAR on a TI screen

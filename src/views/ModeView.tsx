@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { focusedField, useKeypadHandler } from '../components/DeviceKeypad';
+import { activeField, useKeypadHandler } from '../components/DeviceKeypad';
 import { useStore, type Settings } from '../state/store';
 
 /**
@@ -179,7 +179,7 @@ export function ModeView() {
   }, [cursor.row]);
 
   useKeypadHandler((a) => {
-    if (focusedField()) return false;
+    if (activeField()) return false;
     if (a.type === 'scroll') move(a.dir, 0);
     else if (a.type === 'left') move(0, -1);
     else if (a.type === 'right') move(0, 1);
@@ -191,7 +191,7 @@ export function ModeView() {
   // Physical keyboard: arrows + Enter
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (focusedField()) return;
+      if (activeField()) return;
       const map: Record<string, () => void> = {
         ArrowUp: () => move(-1, 0),
         ArrowDown: () => move(1, 0),

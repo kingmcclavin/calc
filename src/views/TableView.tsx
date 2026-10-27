@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { NumberField } from '../components/ui';
-import { focusedField, useKeypadHandler } from '../components/DeviceKeypad';
+import { activeField, useKeypadHandler } from '../components/DeviceKeypad';
 import { formatNumber } from '../math/format';
 import { compileMode, evaluateSequences, modeLabels, modeWindow, SEQ_NAMES } from '../graph/modes';
 import { useNumberEvaluator, useParsedFunctions } from '../state/context';
@@ -37,7 +37,7 @@ export function TableView() {
 
   // ▲/▼ on the keypad scroll the table one step, like the TI-84 TABLE screen
   useKeypadHandler((a) => {
-    if (a.type !== 'scroll' || focusedField()) return false;
+    if (a.type !== 'scroll' || activeField()) return false;
     setTable(start + a.dir * step * (a.page ? 6 : 1), step);
     return true;
   });

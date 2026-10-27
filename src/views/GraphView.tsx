@@ -4,7 +4,7 @@ import { compileMode, modeLabels, modeWindow, type ParamMode } from '../graph/mo
 import { runAnalysis, TOOLS, type AnalysisOutput, type Tool } from '../graph/analysis';
 import { squareWindow, zoomWindow, ZOOM_PRESETS, type ZoomPreset } from '../graph/viewport';
 import { MathInput } from '../components/MathInput';
-import { focusedField, useKeypadHandler } from '../components/DeviceKeypad';
+import { activeField, useKeypadHandler } from '../components/DeviceKeypad';
 import { CalculateView } from './CalculateView';
 import { TableView } from './TableView';
 import { SymbolBar } from '../components/SymbolBar';
@@ -184,7 +184,7 @@ export function GraphView({ screen }: { screen: 'equations' | 'graph' }) {
   // Keypad arrows drive the graph like a TI-84: trace along curves, or pan when not tracing
   useKeypadHandler((a) => {
     if (pane === 'list') return false;
-    const field = focusedField();
+    const field = activeField();
     // the home screen shown in a HORIZONTAL split keeps its entry line focused
     if (field && !field.closest('.split-pane')) return false;
     // GRAPH-TABLE split: ▲▼ scroll the table, ◀▶ trace the graph
